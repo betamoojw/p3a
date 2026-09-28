@@ -1,0 +1,13 @@
+{
+ "pid": 31468,
+ "port": "COM5",
+ "baud": 115200,
+ "run": "SDLOG-01",
+ "started": "2026-09-28T18:52:44.974",
+ "last_line": "2026-09-28T19:01:43.983",
+ "lines": 89,
+ "stall_reports": 0,
+ "errors": 0,
+ "reopens": 1,
+ "status": "open"
+}
