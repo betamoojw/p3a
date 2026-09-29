@@ -17,18 +17,29 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <dirent.h>
 
 static const char *TAG = "sd_repair";
 
 #define SD_MOUNT_PREFIX "/sdcard"
 #define LOST_DIR_NAME   "lost"
-#define PROBE_NAME      ".sdrp"
+// The probe name is long on purpose: it needs 6 contiguous directory
+// entries (5 LFN + 1 SFN), like the artwork names p3a writes. A short name
+// fits in a single stray free slot ahead of the junk and would report a
+// phantom directory as healthy (seen on vault/5/51).
+#define PROBE_NAME      ".sdrp-probe-do-not-keep-0123456789abcdef0123456789.tmp"
+// A readdir() scan that reaches this many entries, or meets a name with
+// bytes outside printable ASCII, is looking at foreign data. p3a directories
+// hold a few hundred entries at most and only ASCII names.
+#define SCAN_MAX_ENTRIES 2048
 #define NVS_NAMESPACE   "sd_repair"
 #define NVS_KEY_TOTAL   "total"
+#define REPAIR_PATH_MAX 520   // matches FS_ATOMIC_PATH_MAX (longest SD path seen + suffixes)
 
 // FAT mirror check: 64 KB per copy per step (128 sectors), 128 B aligned in
 // PSRAM (SDMMC DMA on the P4 wants cache-line alignment, jitter fix 1).
@@ -118,34 +129,84 @@ static bool dir_exists(const char *path)
     return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
+/**
+ * Fallback when the create probe cannot run (FatFS refused the create):
+ * enumerate the directory. Junk shows up as non-ASCII names, or as a table
+ * that never ends (a chain running through FAT junk gives FatFS a 65536-entry
+ * directory and creates fail with FR_DENIED / EACCES).
+ */
+static bool dir_scan_looks_damaged(const char *dir_path)
+{
+    DIR *d = opendir(dir_path);
+    if (!d) {
+        return false;
+    }
+    bool damaged = false;
+    int n = 0;
+    struct dirent *de;
+    while ((de = readdir(d)) != NULL) {
+        if (++n >= SCAN_MAX_ENTRIES) {
+            ESP_LOGW(TAG, "directory table does not end (%d+ entries): %s", n, dir_path);
+            damaged = true;
+            break;
+        }
+        for (const unsigned char *c = (const unsigned char *)de->d_name; *c; c++) {
+            if (*c < 0x20 || *c > 0x7E) {
+                ESP_LOGW(TAG, "directory holds foreign entries (non-ASCII name at #%d): %s", n, dir_path);
+                damaged = true;
+                break;
+            }
+        }
+        if (damaged) {
+            break;
+        }
+    }
+    closedir(d);
+    return damaged;
+}
+
 bool sd_repair_dir_is_damaged(const char *dir_path)
 {
     if (!is_sd_path(dir_path)) {
         return false;
     }
-    char probe[SD_PATH_ROOT_MAX_LEN + 300];
-    int n = snprintf(probe, sizeof(probe), "%s/" PROBE_NAME, dir_path);
-    if (n < 0 || n >= (int)sizeof(probe)) {
+    // Path buffers live on the heap: this runs on whichever task hit the
+    // failure (download workers included), and their stacks are small.
+    char *probe = malloc(REPAIR_PATH_MAX);
+    if (!probe) {
         return false;
+    }
+    bool damaged = false;
+    int n = snprintf(probe, REPAIR_PATH_MAX, "%s/" PROBE_NAME, dir_path);
+    if (n < 0 || n >= REPAIR_PATH_MAX) {
+        goto out;
     }
     unlink(probe);  // stale marker from an interrupted probe (a no-op on a phantom)
 
     FILE *f = fopen(probe, "wb");
     if (!f) {
-        // Cannot create at all: not the phantom signature (the directory may
-        // be missing, or the card refuses writes). Leave that to the caller.
-        return false;
+        // FatFS refused the create. ENOENT/EACCES here can still be junk (a
+        // table that never ends); let the enumeration decide. Anything else
+        // (ENOSPC, EIO) is not our business.
+        int e = errno;
+        if (e == ENOENT || e == EACCES) {
+            damaged = dir_scan_looks_damaged(dir_path);
+        }
+        goto out;
     }
     fclose(f);
 
     struct stat st;
     if (stat(probe, &st) == 0) {
         unlink(probe);
-        return false;   // healthy: what we created is visible
+        goto out;       // healthy: what we created is visible
     }
     int e = errno;
     ESP_LOGW(TAG, "directory hides its own new entries (phantom zone): %s (stat errno=%d)", dir_path, e);
-    return e == ENOENT;
+    damaged = (e == ENOENT);
+out:
+    free(probe);
+    return damaged;
 }
 
 esp_err_t sd_repair_quarantine_dir(const char *dir_path)
@@ -161,11 +222,18 @@ esp_err_t sd_repair_quarantine_dir(const char *dir_path)
         return ESP_ERR_INVALID_ARG;
     }
 
-    char lost_dir[SD_PATH_ROOT_MAX_LEN + 16];
-    snprintf(lost_dir, sizeof(lost_dir), "%s/" LOST_DIR_NAME, root);
+    // Two heap path buffers: lost/ directory, then the destination name.
+    char *lost_dir = malloc(REPAIR_PATH_MAX);
+    char *dest = malloc(REPAIR_PATH_MAX);
+    esp_err_t err = ESP_FAIL;
+    if (!lost_dir || !dest) {
+        err = ESP_ERR_NO_MEM;
+        goto out;
+    }
+    snprintf(lost_dir, REPAIR_PATH_MAX, "%s/" LOST_DIR_NAME, root);
     if (!dir_exists(lost_dir) && mkdir(lost_dir, 0755) != 0 && errno != EEXIST) {
         ESP_LOGE(TAG, "cannot create %s (errno=%d)", lost_dir, errno);
-        return ESP_FAIL;
+        goto out;
     }
 
     // Name the quarantined copy after its path below the root, slashes
@@ -179,34 +247,38 @@ esp_err_t sd_repair_quarantine_dir(const char *dir_path)
         }
     }
     load_total();
-    char dest[SD_PATH_ROOT_MAX_LEN + 128];
     for (uint32_t seq = s_total_repairs + 1;; seq++) {
-        int n = snprintf(dest, sizeof(dest), "%s/%s-%lu", lost_dir, base, (unsigned long)seq);
-        if (n < 0 || n >= (int)sizeof(dest)) {
-            return ESP_ERR_INVALID_ARG;
+        int n = snprintf(dest, REPAIR_PATH_MAX, "%s/%s-%lu", lost_dir, base, (unsigned long)seq);
+        if (n < 0 || n >= REPAIR_PATH_MAX) {
+            err = ESP_ERR_INVALID_ARG;
+            goto out;
         }
         struct stat st;
         if (stat(dest, &st) != 0) {
             break;
         }
         if (seq > s_total_repairs + 1000) {
-            return ESP_FAIL;
+            goto out;
         }
     }
 
     if (rename(dir_path, dest) != 0) {
         ESP_LOGE(TAG, "quarantine rename failed: %s -> %s (errno=%d)", dir_path, dest, errno);
-        return ESP_FAIL;
+        goto out;
     }
     if (mkdir(dir_path, 0755) != 0 && errno != EEXIST) {
         ESP_LOGE(TAG, "recreate after quarantine failed: %s (errno=%d)", dir_path, errno);
-        return ESP_FAIL;
+        goto out;
     }
     count_repair();
     ESP_LOGE(TAG, "REPAIRED damaged directory: %s moved to %s and recreated empty "
                   "(repair %lu this boot, %lu total). The card is corrupting data.",
              dir_path, dest, (unsigned long)s_boot_repairs, (unsigned long)s_total_repairs);
-    return ESP_OK;
+    err = ESP_OK;
+out:
+    free(lost_dir);
+    free(dest);
+    return err;
 }
 
 esp_err_t sd_repair_heal_for_write(const char *file_path)
@@ -220,26 +292,34 @@ esp_err_t sd_repair_heal_for_write(const char *file_path)
         return ESP_ERR_NOT_FOUND;  // outside the configured root: not ours to heal
     }
 
-    char dir[SD_PATH_ROOT_MAX_LEN + 300];
-    strlcpy(dir, file_path, sizeof(dir));
+    // Three heap path buffers: the target directory, the prefix being
+    // walked, and that prefix's parent.
+    char *dir = malloc(REPAIR_PATH_MAX);
+    char *probe = malloc(REPAIR_PATH_MAX);
+    char *parent = malloc(REPAIR_PATH_MAX);
+    esp_err_t err = ESP_ERR_NOT_FOUND;
+    bool repaired = false;
+    if (!dir || !probe || !parent) {
+        err = ESP_ERR_NO_MEM;
+        goto out;
+    }
+    strlcpy(dir, file_path, REPAIR_PATH_MAX);
     char *last = strrchr(dir, '/');
     if (!last || last == dir) {
-        return ESP_ERR_NOT_FOUND;
+        goto out;
     }
     *last = '\0';
     if (strlen(dir) <= root_len) {
-        // File directly under the SD root: probe the root itself, which we
-        // cannot quarantine; report and let the caller fail normally.
-        return ESP_ERR_NOT_FOUND;
+        // File directly under the SD root: the root itself cannot be
+        // quarantined; let the caller fail normally.
+        goto out;
     }
 
     // Walk from the root down. At the first component that does not exist,
     // decide whether its parent is hiding it (damaged) or it simply never
     // existed (create it). The deepest existing directory is probed last.
-    char probe[sizeof(dir)];
-    strlcpy(probe, dir, sizeof(probe));
+    strlcpy(probe, dir, REPAIR_PATH_MAX);
     char *p = probe + root_len + 1;
-    bool repaired = false;
     while (true) {
         char *slash = strchr(p, '/');
         if (slash) {
@@ -247,22 +327,21 @@ esp_err_t sd_repair_heal_for_write(const char *file_path)
         }
         // probe now holds a prefix directory path
         if (!dir_exists(probe)) {
-            // parent = probe minus last component
-            char parent[sizeof(probe)];
-            strlcpy(parent, probe, sizeof(parent));
+            strlcpy(parent, probe, REPAIR_PATH_MAX);
             char *ps = strrchr(parent, '/');
             if (ps) {
                 *ps = '\0';
             }
             if (strlen(parent) > root_len && sd_repair_dir_is_damaged(parent)) {
                 if (sd_repair_quarantine_dir(parent) != ESP_OK) {
-                    return ESP_FAIL;
+                    err = ESP_FAIL;
+                    goto out;
                 }
                 repaired = true;
             }
             if (mkdir(probe, 0755) != 0 && errno != EEXIST) {
                 ESP_LOGE(TAG, "mkdir %s failed during heal (errno=%d)", probe, errno);
-                return repaired ? ESP_OK : ESP_ERR_NOT_FOUND;
+                goto out;
             }
         }
         if (!slash) {
@@ -275,11 +354,16 @@ esp_err_t sd_repair_heal_for_write(const char *file_path)
     // The target directory exists (or was just created): probe it.
     if (!repaired && sd_repair_dir_is_damaged(dir)) {
         if (sd_repair_quarantine_dir(dir) != ESP_OK) {
-            return ESP_FAIL;
+            err = ESP_FAIL;
+            goto out;
         }
         repaired = true;
     }
-    return repaired ? ESP_OK : ESP_ERR_NOT_FOUND;
+out:
+    free(dir);
+    free(probe);
+    free(parent);
+    return repaired ? ESP_OK : err;
 }
 
 // ----------------------------------------------------------------------------

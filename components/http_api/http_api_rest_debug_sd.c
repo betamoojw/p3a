@@ -16,8 +16,11 @@
  *   GET /api/debug/sd/ls?path=/sdcard/...  what FatFS enumerates for a
  *                                          directory (name, type, size)
  *   GET /api/debug/sd/stat?path=...        stat() result or errno
+ *   GET /api/debug/sd/unlink?path=...      unlink() one regular file under
+ *                                          the SD root (repair clean-up)
  *
- * Strictly read-only. Raw reads go through sdmmc_read_sectors(), which the
+ * Read-only except for unlink, which refuses directories and anything
+ * outside the configured SD root. Raw reads go through sdmmc_read_sectors(), which the
  * host driver serializes against FatFS traffic with its own mutex, so they
  * are safe while the volume is mounted (the view of not-yet-flushed FatFS
  * window data may lag by one sync).
@@ -30,6 +33,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <unistd.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #include "esp_http_server.h"
@@ -301,6 +305,47 @@ static esp_err_t h_sd_stat(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t h_sd_unlink(httpd_req_t *req)
+{
+    char path[300];
+    if (!query_str(req, "path", path, sizeof(path)) || !path_is_sd(path)) {
+        send_json_error(req, 400, "BAD_PATH", "path query parameter under /sdcard required");
+        return ESP_OK;
+    }
+    const char *root = sd_path_get_root();
+    size_t root_len = strlen(root);
+    if (strncmp(path, root, root_len) != 0 || path[root_len] != '/') {
+        send_json_error(req, 400, "OUTSIDE_ROOT", "path must be below the configured SD root");
+        return ESP_OK;
+    }
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        send_json_errorf(req, 404, "NOT_FOUND", "stat failed (errno=%d)", errno);
+        return ESP_OK;
+    }
+    if (S_ISDIR(st.st_mode)) {
+        send_json_error(req, 400, "IS_DIR", "refusing to unlink a directory");
+        return ESP_OK;
+    }
+    cJSON *root_obj = cJSON_CreateObject();
+    cJSON *data = cJSON_CreateObject();
+    if (!root_obj || !data) {
+        cJSON_Delete(root_obj);
+        cJSON_Delete(data);
+        send_json_oom(req);
+        return ESP_OK;
+    }
+    cJSON_AddBoolToObject(root_obj, "ok", true);
+    cJSON_AddItemToObject(root_obj, "data", data);
+    cJSON_AddStringToObject(data, "path", path);
+    errno = 0;
+    int rc = unlink(path);
+    cJSON_AddBoolToObject(data, "unlinked", rc == 0);
+    cJSON_AddNumberToObject(data, "errno", rc == 0 ? 0 : errno);
+    send_json_root(req, 200, root_obj);
+    return ESP_OK;
+}
+
 esp_err_t h_get_debug_sd_route(httpd_req_t *req)
 {
     const char *uri = req->uri;
@@ -308,6 +353,7 @@ esp_err_t h_get_debug_sd_route(httpd_req_t *req)
     if (strncmp(uri, "/api/debug/sd/read", 18) == 0) return h_sd_read(req);
     if (strncmp(uri, "/api/debug/sd/ls", 16) == 0) return h_sd_ls(req);
     if (strncmp(uri, "/api/debug/sd/stat", 18) == 0) return h_sd_stat(req);
+    if (strncmp(uri, "/api/debug/sd/unlink", 20) == 0) return h_sd_unlink(req);
     httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");
     return ESP_OK;
 }

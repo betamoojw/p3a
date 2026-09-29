@@ -85,14 +85,18 @@ static esp_err_t finalize_rename(const char *tmp_path, const char *final_path,
         ESP_LOGE(TAG, "Rename failed: %s -> %s (errno=%d)", tmp_path, final_path, rename_errno);
         // ENOENT right after a successful create+fsync in the same directory
         // is the signature of a directory the card has overwritten (phantom
-        // entries, see sd_repair.h). Heal it; the tmp went away with the
+        // entries, see sd_repair.h); EACCES is FatFS refusing to allocate in a
+        // table that never ends. Heal it; the tmp went away with the
         // quarantined directory, so the caller has to redo the write.
-        if (rename_errno == ENOENT && sd_repair_heal_for_write(final_path) == ESP_OK) {
+        if ((rename_errno == ENOENT || rename_errno == EACCES) &&
+                sd_repair_heal_for_write(final_path) == ESP_OK) {
             ESP_LOGW(TAG, "Directory repaired, write must be redone: %s", final_path);
             if (dir_repaired) {
                 *dir_repaired = true;
             }
-            return ESP_ERR_NOT_FOUND;
+            // Not ESP_ERR_NOT_FOUND: http_fetch uses that for HTTP 404 and the
+            // downloaders tombstone the artwork on it (.404 marker).
+            return ESP_ERR_NOT_FINISHED;
         }
         unlink(tmp_path);
         if (had_backup) {
@@ -140,7 +144,8 @@ esp_err_t fs_atomic_write_cb(const char *final_path, fs_atomic_writer_cb_t write
         FILE *f = fopen(tmp_path, "wb");
         if (!f) {
             int open_errno = errno;
-            if (open_errno == ENOENT && attempt == 0 && sd_repair_heal_for_write(final_path) == ESP_OK) {
+            if ((open_errno == ENOENT || open_errno == EACCES) && attempt == 0 &&
+                sd_repair_heal_for_write(final_path) == ESP_OK) {
                 ESP_LOGW(TAG, "Directory repaired, retrying write: %s", final_path);
                 continue;
             }
@@ -219,7 +224,8 @@ esp_err_t fs_atomic_rename(const char *tmp_path, const char *final_path,
         unlink(tmp_path);  // caller's tmp is orphaned either way; tidy up
         return ESP_ERR_INVALID_STATE;
     }
-    // A repaired directory surfaces as ESP_ERR_NOT_FOUND: the caller's tmp is
-    // gone with it and the whole download/save has to be redone.
+    // A repaired directory surfaces as ESP_ERR_NOT_FINISHED (a transient
+    // failure to the caller): the tmp is gone with the quarantined directory
+    // and the whole download/save has to be redone.
     return finalize_rename(tmp_path, final_path, opts, NULL);
 }

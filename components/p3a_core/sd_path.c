@@ -237,7 +237,7 @@ esp_err_t sd_path_ensure_parent_dirs(const char *filepath)
                 // ENOENT here means the parent hides its own entries (a
                 // directory the card overwrote): sd_repair quarantines and
                 // recreates the whole missing chain.
-                if (errno == ENOENT && sd_repair_heal_for_write(filepath) == ESP_OK) {
+                if ((errno == ENOENT || errno == EACCES) && sd_repair_heal_for_write(filepath) == ESP_OK) {
                     ESP_LOGW(TAG, "parent directory repaired for %s", filepath);
                     sd_health_report_write_ok(filepath);
                     return ESP_OK;

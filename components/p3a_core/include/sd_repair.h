@@ -74,10 +74,12 @@ esp_err_t sd_repair_fat_mirror(sdmmc_card_t *card, bool fix, sd_repair_fat_stats
 const sd_repair_fat_stats_t *sd_repair_fat_stats(void);
 
 /**
- * Probe a directory: create a marker file in it and stat it back. Returns
- * true when the directory hides its own new entries (phantom zone). The
- * marker is removed on healthy directories. Paths outside the SD mount are
- * always healthy.
+ * Probe a directory: create a long-named marker file in it and stat it back.
+ * Returns true when the directory hides its own new entries (phantom zone),
+ * or, when FatFS refuses the create with ENOENT/EACCES, when an enumeration
+ * shows foreign entries (non-ASCII names) or a table that never ends (a
+ * chain through FAT junk). The marker is removed on healthy directories.
+ * Paths outside the SD mount are always healthy.
  */
 bool sd_repair_dir_is_damaged(const char *dir_path);
 
@@ -88,8 +90,8 @@ bool sd_repair_dir_is_damaged(const char *dir_path);
 esp_err_t sd_repair_quarantine_dir(const char *dir_path);
 
 /**
- * A write to file_path failed with ENOENT: find out whether its directory
- * (or an ancestor) is damaged and repair it. Returns ESP_OK when something
+ * A write to file_path failed with ENOENT or EACCES: find out whether its
+ * directory (or an ancestor) is damaged and repair it. Returns ESP_OK when something
  * was repaired and the caller may retry the write, ESP_ERR_NOT_FOUND when
  * nothing was wrong with the directories (the ENOENT has another cause), or
  * an error when a repair was needed but failed.

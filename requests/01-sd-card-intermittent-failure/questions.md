@@ -40,3 +40,19 @@ it too. Fab merges when satisfied.
 **Does the trouble coincide with anything specific?**
 No pattern noticed. The device was working normally, was unplugged, sat
 unplugged for three days, and was having issues when replugged today.
+
+## Round 3 (evening of 2026-09-28, before the overnight soak)
+
+**Format the card overnight to test the format path and a clean filesystem?**
+No, keep the card as-is: preserve the evidence for the later A/B and PC
+inspection; only archive dumps and observe.
+
+**Boot FAT mirror check costs about one second per boot on 64 GB. Acceptable?**
+One second is fine; keep the full compare.
+
+**Branch handover?** Push `fix/sd-resilience` to origin, no pull request.
+
+**Anything else overnight?** Overnight soak with a morning report; a
+release-configuration build of the branch (no debug overlay) flashed in the
+morning for a final check; a simplify/review pass on the new code with no
+behavior change without device re-test.
