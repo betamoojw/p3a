@@ -18,7 +18,8 @@ display (24-bit, MIPI-DSI), GT911 capacitive touch, 32 MB PSRAM, 32 MB flash,
 and an ESP32-C6 Wi-Fi 6 co-processor reached through esp_hosted over SDIO.
 
 The firmware is public (Apache 2.0) and runs on real users' devices, which
-update themselves over the air from GitHub Releases. Treat `main` as
+receive updates over the air from GitHub Releases once their owner approves
+the install in the web UI (nothing installs unattended). Treat `main` as
 production.
 
 ## Ground rules

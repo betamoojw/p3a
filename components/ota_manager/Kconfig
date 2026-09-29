@@ -4,9 +4,11 @@ config OTA_WEBUI_ENABLE
     bool "Enable Web UI OTA updates"
     default y
     help
-        Enable automatic over-the-air updates for the web UI partition.
-        When enabled, the device will check for web UI updates alongside
-        firmware updates and install them automatically.
+        Enable over-the-air updates for the web UI partition. When enabled,
+        the periodic check looks for a newer web UI alongside the firmware
+        and flags it in the web UI; like a firmware update, it is installed
+        only when the owner approves it on the Update page (or through
+        POST /webui/ota/install). Nothing installs unattended.
 
         The web UI version is independent of the firmware version.
         Updates are downloaded from GitHub Releases (storage.bin) and

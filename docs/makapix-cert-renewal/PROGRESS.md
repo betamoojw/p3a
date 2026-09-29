@@ -171,3 +171,12 @@ unverified on hardware until Fab tests):
 
 Reply sent as MPX message 0011 (answers (a), (b), (c); asks them to keep 200
 permanent and to report reconnect counts after 2026-10-25).
+
+Erratum, same day (MPX message 0012): 0011 claimed devices install updates
+automatically. They do not. The OTA check runs every 12 h (first one 12 h
+after boot) and only flags the update; installing needs the owner to click
+Install in the web UI, for firmware and web UI alike. So 1.0.0 units cannot
+recover on their own after 2026-10-25 (asked MPX to nudge those owners), the
+1.2.4 proactive path reaches only players whose owners install it, and the
+mixed 1.0.0 to 1.2.3 fleet is explained by the approval step. The same
+wording was corrected in AGENTS.md and the OTA_WEBUI_ENABLE Kconfig help.
