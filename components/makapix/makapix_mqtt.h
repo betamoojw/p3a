@@ -197,6 +197,20 @@ int makapix_mqtt_get_auth_failure_count(void);
  * @brief Reset TLS authentication failure counter
  *
  * Call when starting fresh provisioning to clear previous failure state.
+ * Also clears the server-certificate verify-failure flag.
  */
 void makapix_mqtt_reset_auth_failure_count(void);
+
+/**
+ * @brief Whether the last TLS failure was the device rejecting the broker
+ *
+ * True when the most recent MQTT TLS error carried non-zero certificate
+ * verify flags: the broker's certificate did not validate against the
+ * stored ca_pem (CA rotation, expired trust anchor). The client
+ * certificate's remaining lifetime says nothing about this case, so the
+ * reconnect path forces a renewal at once instead of waiting for the
+ * auth-failure threshold. Cleared on successful connect and by
+ * makapix_mqtt_reset_auth_failure_count().
+ */
+bool makapix_mqtt_server_cert_verify_failed(void);
 

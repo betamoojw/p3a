@@ -124,9 +124,39 @@ void makapix_channel_switch_task(void *pvParameters)
 }
 
 // One certificate self-heal renewal attempt is allowed per connection
-// outage: set when the reconnect task consumes it at the auth-failure
-// threshold, re-armed on every successful MQTT connection.
+// outage: set when the reconnect task consumes it (at the auth-failure
+// threshold, or at once on a broker-certificate verify failure), re-armed
+// on every successful MQTT connection. An attempt that never reached the
+// network because the clock was not yet set does not consume it.
 static bool s_cert_selfheal_attempted = false;
+
+/**
+ * Run the one-shot certificate self-heal (forced renewal via the bearer
+ * token, which works even when the stored cert has expired). Returns true
+ * when fresh certificates were persisted and the caller should retry MQTT.
+ */
+static bool try_cert_selfheal(const char *reason)
+{
+    s_cert_selfheal_attempted = true;
+    ESP_LOGW(MAKAPIX_TAG, "%s; attempting certificate self-heal "
+             "(stored cert %s per local clock)",
+             reason, makapix_renewal_cert_expired() ? "EXPIRED" : "not expired");
+    esp_err_t renew_err = makapix_renewal_attempt(true);
+    if (renew_err == ESP_OK) {
+        ESP_LOGI(MAKAPIX_TAG, "Self-heal renewal succeeded; retrying MQTT with fresh certificates");
+        makapix_mqtt_reset_auth_failure_count();
+        return true;
+    }
+    ESP_LOGE(MAKAPIX_TAG, "Self-heal renewal failed: %s", esp_err_to_name(renew_err));
+    // No clock means no decision was made and no request was sent (SNTP
+    // still pending): keep the one-shot for when the clock is real.
+    makapix_renewal_status_t st;
+    makapix_renewal_get_status(&st);
+    if (strcmp(st.last_result, "no_clock") == 0) {
+        s_cert_selfheal_attempted = false;
+    }
+    return false;
+}
 
 /**
  * @brief MQTT connection state change callback
@@ -259,17 +289,9 @@ void makapix_mqtt_reconnect_task(void *pvParameters)
             // failure signature, and unlike a true ghost registration it is
             // fully recoverable without the owner re-registering.
             if (!s_cert_selfheal_attempted) {
-                s_cert_selfheal_attempted = true;
-                ESP_LOGW(MAKAPIX_TAG, "TLS auth failure threshold hit; attempting certificate self-heal "
-                         "(stored cert %s per local clock) before latching registration invalid",
-                         makapix_renewal_cert_expired() ? "EXPIRED" : "not expired");
-                esp_err_t renew_err = makapix_renewal_attempt(true);
-                if (renew_err == ESP_OK) {
-                    ESP_LOGI(MAKAPIX_TAG, "Self-heal renewal succeeded; retrying MQTT with fresh certificates");
-                    makapix_mqtt_reset_auth_failure_count();
+                if (try_cert_selfheal("TLS auth failure threshold hit")) {
                     continue;
                 }
-                ESP_LOGE(MAKAPIX_TAG, "Self-heal renewal failed: %s", esp_err_to_name(renew_err));
             }
             ESP_LOGE(MAKAPIX_TAG, "Too many TLS auth failures (%d) - registration appears invalid",
                      makapix_mqtt_get_auth_failure_count());
@@ -283,6 +305,19 @@ void makapix_mqtt_reconnect_task(void *pvParameters)
         if (app_wifi_get_local_ip(wifi_ip, sizeof(wifi_ip)) != ESP_OK ||
             strcmp(wifi_ip, "0.0.0.0") == 0) {
             continue;  // No WiFi, wait silently
+        }
+
+        // The device could not validate the broker's certificate against
+        // its stored ca_pem: the trust anchor was rotated or has expired.
+        // The client cert's own age is irrelevant here, so don't wait for
+        // the failure threshold; renew now (the response carries the
+        // current ca_pem) and retry. Sits after the Wi-Fi gate so the
+        // one-shot is not spent on a request that cannot leave the device.
+        if (!s_cert_selfheal_attempted && makapix_mqtt_server_cert_verify_failed() &&
+            makapix_mqtt_get_auth_failure_count() > 0) {
+            if (try_cert_selfheal("Broker certificate failed verification against stored CA")) {
+                continue;
+            }
         }
 
         if (makapix_store_get_mqtt_host(mqtt_host, sizeof(mqtt_host)) != ESP_OK) {

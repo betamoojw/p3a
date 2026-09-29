@@ -932,8 +932,8 @@ Authorization: Bearer <user_jwt_token>
 - **Certificate Authority**: Makapix Club CA
 - **Client Authentication**: Required (CN = player_key)
 - **TLS Version**: TLS 1.2 or higher
-- **Certificate Validity**: 365 days
-- **Renewal**: Available within 30 days of expiry
+- **Certificate Validity**: 3 years (renewed certs; the first batch was shorter)
+- **Renewal**: Available within 200 days of expiry (server `CERT_RENEWAL_THRESHOLD_DAYS`, raised from 90 on 2026-09-29); the response carries the current CA certificate
 
 **Certificate Chain**:
 ```

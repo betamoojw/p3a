@@ -21,6 +21,12 @@
  *  - The token works even after the certificate has expired, so a device
  *    that slept through its expiry self-heals instead of latching
  *    REGISTRATION_INVALID.
+ *  - The renewal response also carries the current CA certificate, so a
+ *    renewal is how the trust anchor rotates. Three paths get it to the
+ *    device: the local window (190 days, inside the server's 200), a forced
+ *    renewal from the reconnect task when the broker's certificate fails
+ *    verification against the stored ca_pem, and a forced attempt from the
+ *    periodic check while the device is latched REGISTRATION_INVALID.
  */
 
 #pragma once

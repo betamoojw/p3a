@@ -73,6 +73,11 @@ static mqtt_client_state_t s_mqtt_state = MQTT_CLIENT_NONE;
 
 // Track consecutive TLS authentication failures to detect invalid registration
 static int s_consecutive_auth_failures = 0;
+// Set when the last TLS failure carried non-zero certificate verify flags:
+// the device could not validate the broker's certificate against its stored
+// ca_pem (CA rotation, expired trust anchor). Cleared on connect and with
+// the auth-failure counter.
+static bool s_server_cert_verify_failed = false;
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
@@ -84,6 +89,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         ESP_LOGI(TAG, "Connected to %s", s_mqtt_uri);
         // Reset auth failure counter on successful connection
         s_consecutive_auth_failures = 0;
+        s_server_cert_verify_failed = false;
         // Update state under mutex
         if (s_mqtt_mutex) {
             xSemaphoreTake(s_mqtt_mutex, portMAX_DELAY);
@@ -363,12 +369,18 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 ESP_LOGE(TAG, "TLS error: 0x%x (%s)",
                          event->error_handle->esp_tls_last_esp_err,
                          esp_err_to_name(event->error_handle->esp_tls_last_esp_err));
-                // Track TLS handshake failures - indicates server rejecting client certificate
-                // Error 0x801a (ESP_ERR_MBEDTLS_SSL_HANDSHAKE_FAILED) typically means invalid/revoked cert
+                // Track TLS handshake failures. 0x801a
+                // (ESP_ERR_MBEDTLS_SSL_HANDSHAKE_FAILED) covers both directions:
+                // the broker rejecting our client certificate (expired,
+                // revoked, ghost registration) and us rejecting the broker's
+                // certificate (verify flags below). Both are cured by a
+                // certificate renewal, which also refreshes ca_pem.
                 if (event->error_handle->esp_tls_last_esp_err == 0x801a) {  // ESP_ERR_MBEDTLS_SSL_HANDSHAKE_FAILED
                     s_consecutive_auth_failures++;
-                    ESP_LOGW(TAG, "TLS auth failure #%d (server rejected client certificate)",
-                             s_consecutive_auth_failures);
+                    ESP_LOGW(TAG, "TLS auth failure #%d (%s)", s_consecutive_auth_failures,
+                             event->error_handle->esp_tls_cert_verify_flags
+                                 ? "broker certificate failed verification against stored CA"
+                                 : "broker rejected client certificate");
                 }
             }
             if (event->error_handle->esp_transport_sock_errno) {
@@ -376,6 +388,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             }
             if (event->error_handle->esp_tls_cert_verify_flags) {
                 ESP_LOGE(TAG, "TLS cert verify flags: 0x%x", event->error_handle->esp_tls_cert_verify_flags);
+                s_server_cert_verify_failed = true;
             }
         } else {
             ESP_LOGE(TAG, "MQTT error: unknown (no error handle)");
@@ -874,6 +887,12 @@ int makapix_mqtt_get_auth_failure_count(void)
 void makapix_mqtt_reset_auth_failure_count(void)
 {
     s_consecutive_auth_failures = 0;
+    s_server_cert_verify_failed = false;
     ESP_LOGD(TAG, "Auth failure counter reset");
+}
+
+bool makapix_mqtt_server_cert_verify_failed(void)
+{
+    return s_server_cert_verify_failed;
 }
 

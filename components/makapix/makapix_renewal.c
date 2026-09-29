@@ -559,7 +559,15 @@ static void renewal_task(void *pvParameters)
         // and the check must not fire before the clock is real).
         wait_for_network_and_time();
 
-        esp_err_t err = makapix_renewal_attempt(false);
+        // A device latched REGISTRATION_INVALID has spent its one-shot
+        // self-heal; this periodic check is its only way back online. Let
+        // the server decide instead of the local window, which can say
+        // "not due" for months while the real fault is a stale ca_pem or a
+        // revoked cert (a 400 here is the server's answer that the latch is
+        // genuine). One call per check interval stays far inside the
+        // per-player rate limit.
+        bool force = (s_makapix_state == MAKAPIX_STATE_REGISTRATION_INVALID);
+        esp_err_t err = makapix_renewal_attempt(force);
         // ESP_OK and not-due are the normal outcomes; everything else was
         // already logged with its cause and simply waits for the next tick.
         (void)err;

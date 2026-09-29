@@ -124,3 +124,50 @@ project. With firmware renewal released in v1.1.0 (2026-07-17), the renewal
 window opening 2026-09-13, and the earliest fleet cert expiry 2026-12-12,
 the cliff is fully de-risked: renewal is automatic, self-healing was e2e
 tested (T1–T6), and no further tracking is needed.
+
+## 2026-09-29 — Reopened: MQTT CA rotation (old trust anchor expires 2026-10-25)
+
+Trigger: MPX message 0010 (MPX repo, `docs/cert-renewal/messages/`). The
+server re-issued the MQTT CA on 2026-05-27 (same key, 10-year cert). The
+previous CA certificate expires 2026-10-25 02:08 UTC. Devices only receive
+`ca_pem` at provisioning and through the renew-cert response, so 15 of 29
+production players (provisioned before the re-issue, client certs expiring
+2026-12-12 to 2027-04-16) still trust only the old CA. The server raised
+`CERT_RENEWAL_THRESHOLD_DAYS` 90 -> 200 on 2026-09-29 so every such cert is
+inside the server window, and asked whether our check uses a local constant.
+
+Findings against the shipped firmware (1.1.0 through 1.2.3):
+
+- The window IS a local constant: 45 days, checked every 24 h (the "hourly"
+  the MPX team remembered was the July dev config). Earliest fleet cert
+  2026-12-12 puts the first local window at 2026-10-28, after the CA expiry,
+  so no pre-re-issue device renews proactively. All 15 take the three-failure
+  self-heal path: an expired trusted root gives mbedTLS `BADCERT_EXPIRED`,
+  esp-tls reports 0x801a (the code the auth-failure counter keys on) with
+  non-zero verify flags, the reconnect task force-renews after failure #3,
+  renew-cert runs over HTTPS with the public bundle (independent of the MQTT
+  CA), and the response's `ca_pem` is persisted. About 2 minutes of backoff
+  per device, then online. Not lab-tested against an expired root.
+- Gap: the self-heal is one-shot per outage. A transient failure of that one
+  renew-cert call latches `REGISTRATION_INVALID`, and the daily check honours
+  the 45-day window ("not_due"), so such a device stays dark until a
+  power-cycle.
+
+Firmware changes on main for 1.2.4 (release committed to MPX for 2026-10-10;
+unverified on hardware until Fab tests):
+
+1. `MAKAPIX_CERT_RENEW_WINDOW_DAYS` default 45 -> 190 (inside the server's
+   200), in Kconfig and the tracked `sdkconfig`. Updated devices renew every
+   pre-re-issue cert within the 0-7 day jitter of taking the OTA.
+2. Broker-certificate verify failure forces an immediate renewal: the MQTT
+   error handler records non-zero `esp_tls_cert_verify_flags`
+   (`makapix_mqtt_server_cert_verify_failed()`), and the reconnect task
+   calls the shared `try_cert_selfheal()` on the first such failure instead
+   of waiting for the threshold. Future CA rotations no longer depend on the
+   renewal window. A "no_clock" outcome does not consume the one-shot.
+3. The periodic check forces the attempt while the state is
+   `REGISTRATION_INVALID`, so a latched device retries once per check
+   interval and the server (400/404) decides whether the latch is genuine.
+
+Reply sent as MPX message 0011 (answers (a), (b), (c); asks them to keep 200
+permanent and to report reconnect counts after 2026-10-25).

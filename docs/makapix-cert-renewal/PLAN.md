@@ -66,9 +66,13 @@ response buffer, cJSON parse, `MAKAPIX_PEM_MAX_LEN` size guards).
 
 ### When to renew
 
-- **Window:** `now ≥ notAfter − RENEW_WINDOW_DAYS` (Kconfig, default **45**;
-  server allows 90 — staying inside 90 means the server guard never 400s us in
-  steady state).
+- **Window:** `now ≥ notAfter − RENEW_WINDOW_DAYS` (Kconfig, default **190**
+  since 2026-09-29, **45** before; the server allows 200 since 2026-09-29, 90
+  before — staying inside the server window means its guard never 400s us in
+  steady state). The wide window is deliberate: the renew-cert response is
+  the only channel that refreshes `ca_pem`, so a CA rotation must reach every
+  device through a proactive renewal before the old trust anchor expires.
+  See PROGRESS.md, 2026-09-29.
 - **Jitter:** add a per-check random offset (0–7 days via `esp_random()`) so the
   fleet doesn't stampede the API on the same day. Recomputed per check is fine
   at a daily cadence.
@@ -123,7 +127,7 @@ as for the existing fleet.)
 
 ### Kconfig
 
-- `MAKAPIX_CERT_RENEW_WINDOW_DAYS` (default 45)
+- `MAKAPIX_CERT_RENEW_WINDOW_DAYS` (default 190; 45 until 2026-09-29)
 - `MAKAPIX_CERT_RENEW_CHECK_HOURS` (default 24)
 - (host reuses `CONFIG_MAKAPIX_CLUB_HOST`, as provisioning does)
 
