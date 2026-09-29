@@ -145,3 +145,67 @@ damaged so that a child is invisible), the `fs_atomic_write_cb` retry path
   export would also show the cross-linked leftovers.
 - The mitigation is on a feature branch; it needs your merge decision and a
   release with the web UI bump.
+
+## Overnight soak (2026-09-28 22:00 to 2026-09-29 06:00) and follow-up fixes
+
+Setup: device on the diagnostic build, reset-free serial logger on COM5,
+`soak_monitor.py` snapshotting `/status` and hashing both FAT copies every
+30 minutes (16 snapshots, `logs/soak/`).
+
+Three defects in the first cut surfaced within the first hour and were
+fixed, rebuilt, reflashed and re-verified the same night (commit
+`d2e83972`):
+
+1. **False 404 tombstones.** `fs_atomic` reported a repaired directory as
+   `ESP_ERR_NOT_FOUND`, the code `http_fetch` uses for HTTP 404, and the
+   download manager wrote a `.404` marker next to the artwork whose download
+   had triggered the repair. Markers only die through age-based eviction, so
+   124 artworks would have stayed skipped for days. Now `ESP_ERR_NOT_FINISHED`
+   (a plain transient failure); the 124 false markers were removed from the
+   card with a new root-scoped `GET /api/debug/sd/unlink` (diagnostic build
+   only, `clean_false_404.py`).
+2. **Short probe, false negative.** The probe file name fitted a single
+   directory entry and could land in a stray free slot ahead of the junk, so
+   `vault/5/51` (phantom zone at index 106) kept failing every time without
+   being repaired. The probe now needs six contiguous entries, like the
+   artwork names p3a writes.
+3. **Endless directory table, EACCES.** A directory whose cluster chain runs
+   into FAT junk becomes a 36-cluster, 73,000-entry garbage table
+   (`museum/ham/52/0`); FatFS refuses creates there with FR_DENIED (EACCES),
+   not ENOENT, and `http_fetch` opens its temp file itself, bypassing
+   `fs_atomic`. EACCES now triggers the heal, the heal falls back to a
+   `readdir` scan (non-ASCII names, or a table that does not end within
+   2048 entries) when the create probe cannot run, and `http_fetch` heals and
+   retries its open. Path buffers in `sd_repair` moved to the heap for the
+   small-stack download tasks.
+
+Results of the 9 hours on the fixed build:
+
+- 59 more directories repaired (203 on the card by morning; 205 after the
+  release-build check): 32 Giphy, 14 Klipy, 10 vault, 3 museum shards; 57
+  by the phantom probe, 2 by the enumeration scan. No heal failure, no
+  write failure reached `sd_health`, latch never tripped, free space stable
+  (46 GB).
+- FAT drift: none. Across 16 snapshots neither FAT copy changed on one side
+  only and no new junk appeared; every change was a normal FatFS allocation
+  mirrored in both copies. While powered, the card misplaced nothing all
+  night, which fits damage at power loss (card-internal housekeeping).
+- One reboot at 04:02, unrelated: Wi-Fi dropped, the C6 stack would not
+  re-initialize, and the existing `wifi_recovery` escalation rebooted the
+  device after three attempts.
+- Two cached artworks failed to read or decode (`giphy/32/29`,
+  `vault/20/54`), most likely chains through the 75 unrepairable FAT
+  sectors; the existing corrupt-file handling deleted them for re-download.
+- Side observation: all 46 Minneapolis (artsmia) image requests returned
+  HTTP 403 overnight. Separate issue, same shape as the AIC block.
+
+Release-configuration build (`build-rel/`, tracked `sdkconfig`, no debug
+overlay) flashed in the morning: `/api/debug/sd/*` returns 404, the boot FAT
+check runs in 980 ms, directories repair on the fly, `/status` and
+`/playsets/active` carry the counters, the web UI banner is served. Silicon
+revision guards intact. The local `release/v1.2.3/` folder, overwritten by
+every build (the CMake copy step is unconditional), was restored
+byte-identical from the GitHub release.
+
+Still untested: format resetting the persisted repair counter, and the A/B
+with a known-good card.
