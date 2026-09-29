@@ -50,6 +50,7 @@ static sd_repair_fat_stats_t s_fat_stats;
 static uint32_t s_boot_repairs = 0;
 static uint32_t s_total_repairs = 0;
 static bool s_total_loaded = false;
+static bool s_overlay_pending = false;   // armed by the first repair of the boot
 static portMUX_TYPE s_lock = portMUX_INITIALIZER_UNLOCKED;
 
 // ----------------------------------------------------------------------------
@@ -90,8 +91,21 @@ static void count_repair(void)
     portENTER_CRITICAL(&s_lock);
     s_boot_repairs++;
     uint32_t total = ++s_total_repairs;
+    s_overlay_pending = true;
     portEXIT_CRITICAL(&s_lock);
     store_total(total);
+}
+
+bool sd_repair_take_pending_overlay(void)
+{
+    bool pending = false;
+    portENTER_CRITICAL(&s_lock);
+    if (s_overlay_pending) {
+        s_overlay_pending = false;
+        pending = true;
+    }
+    portEXIT_CRITICAL(&s_lock);
+    return pending;
 }
 
 uint32_t sd_repair_count_boot(void)
@@ -534,6 +548,11 @@ esp_err_t sd_repair_fat_mirror(sdmmc_card_t *card, bool fix, sd_repair_fat_stats
         }
     }
     s_fat_stats.ran = true;
+    if (fix && (s_fat_stats.repaired_fat1 || s_fat_stats.repaired_fat2)) {
+        portENTER_CRITICAL(&s_lock);
+        s_overlay_pending = true;   // a rewritten FAT is a repair the user should hear about
+        portEXIT_CRITICAL(&s_lock);
+    }
 
 done:
     s_fat_stats.elapsed_ms = (uint32_t)((esp_timer_get_time() - t0) / 1000);

@@ -98,6 +98,13 @@ esp_err_t sd_repair_quarantine_dir(const char *dir_path);
  */
 esp_err_t sd_repair_heal_for_write(const char *file_path);
 
+/**
+ * For the render loop only: returns true exactly once after the first repair
+ * of the boot (directory quarantine or boot-time FAT restore), so the
+ * on-screen notice shows once per boot by construction.
+ */
+bool sd_repair_take_pending_overlay(void);
+
 /** Directory repairs since boot. */
 uint32_t sd_repair_count_boot(void);
 

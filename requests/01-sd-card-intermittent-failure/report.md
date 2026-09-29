@@ -260,3 +260,16 @@ this morning. The old card is the fault. The self-repair kept the device
 working throughout: no latch, no user-visible failure, caches refilled.
 Repairs since boot on the old card kept landing on shards that had never been
 written since the original damage (Klipy and Giphy shards), as expected.
+
+## On-screen notice (added 2026-09-29 before the merge)
+
+A once-per-boot message box ("SD card repaired. The card is corrupting
+data. Back it up and replace it. Details in the web UI.", 20 s TTL) is armed
+by the first directory quarantine of the boot or by a boot FAT check that
+rewrote sectors, and consumed by the render loop through the same pull model
+as the existing SD-failure notice. It ranks above channel errors and below
+the failure notice. Verified on the device by code path and by the repair
+counter firing twice on the release-configuration build (12:09 and 12:36),
+and the web UI banner was seen; nobody was watching the screen at those
+moments, so the rendering itself is not visually verified. It reuses the
+render path of the SD-failure notice, which is.
