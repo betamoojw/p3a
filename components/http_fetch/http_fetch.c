@@ -43,6 +43,7 @@
 #include "sdio_bus.h"
 #include "fs_atomic.h"   // atomic tmp->final finalize (reports to sd_health)
 #include "sd_health.h"
+#include "sd_repair.h"
 
 static const char *TAG = "http_fetch";
 
@@ -651,9 +652,18 @@ esp_err_t http_fetch_to_file(const http_fetch_request_t *req,
     }
 
     FILE *f = fopen(write_path, "wb");
+    if (!f && (errno == ENOENT || errno == EACCES)) {
+        // The directory may be one the card overwrote (sd_repair): heal it
+        // and try the open once more.
+        if (sd_repair_heal_for_write(out_path) == ESP_OK) {
+            ESP_LOGW(TAG, "Directory repaired, retrying open: %s", write_path);
+            f = fopen(write_path, "wb");
+        }
+    }
     if (!f) {
-        ESP_LOGE(TAG, "Failed to open %s", write_path);
-        sd_health_report_write_failure(write_path, errno);
+        int open_errno = errno;
+        ESP_LOGE(TAG, "Failed to open %s (errno=%d)", write_path, open_errno);
+        sd_health_report_write_failure(write_path, open_errno);
         free(chunk);
         return ESP_FAIL;
     }

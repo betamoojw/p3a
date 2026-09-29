@@ -7,14 +7,17 @@ All 32 components live under `components/`: 29 p3a components, described in orde
 ## 1. p3a_core — Unified State Machine and Lifecycle
 
 - **Purpose**: Central state machine, touch routing, rendering dispatch, SD path management, and boot utilities
-- **Key files**: `p3a_state.c`, `p3a_state_channel.c`, `p3a_state_connectivity.c`, `p3a_render.c`, `p3a_touch_router.c`, `p3a_current_post.c`, `sd_path.c`, `p3a_boot_logo.c`, `intro_anims/` (22 boot intro animations, pure C — see `docs/intro-animations/`), `p3a_logo.c`, `fresh_boot.c`
-- **Public API**: `p3a_state.h`, `p3a_render.h`, `p3a_touch_router.h`, `p3a_current_post.h`, `p3a_logo.h`, `p3a_boot_logo.h`, `p3a_limits.h`, `sd_path.h`, `fresh_boot.h`
+- **Key files**: `p3a_state.c`, `p3a_state_channel.c`, `p3a_state_connectivity.c`, `p3a_render.c`, `p3a_touch_router.c`, `p3a_current_post.c`, `sd_path.c`, `sd_health.c`, `fs_atomic.c`, `sd_repair.c`, `p3a_boot_logo.c`, `intro_anims/` (22 boot intro animations, pure C — see `docs/intro-animations/`), `p3a_logo.c`, `fresh_boot.c`
+- **Public API**: `p3a_state.h`, `p3a_render.h`, `p3a_touch_router.h`, `p3a_current_post.h`, `p3a_logo.h`, `p3a_boot_logo.h`, `p3a_limits.h`, `sd_path.h`, `sd_health.h`, `fs_atomic.h`, `sd_repair.h`, `fresh_boot.h`
 - **States**: `BOOT`, `ANIMATION_PLAYBACK`, `PROVISIONING`, `OTA`, `PICO8_STREAMING`, `ERROR`
 - **Key functions**:
   - `p3a_state_init()`, `p3a_state_get()`, `p3a_state_enter_*()`, `p3a_state_fallback_to_sdcard()` — state transitions
   - `p3a_touch_router_init()`, `p3a_touch_router_handle_event()` — state-aware touch routing
   - `p3a_render_init()`, `p3a_render_frame()` — state-aware rendering dispatch
   - `sd_path_init()`, `sd_path_get_*()` — configurable SD card root directory (default `/sdcard/p3a`)
+  - `sd_health_*()` — boot probe plus passive write-failure counting; three consecutive failures latch `SD_HEALTH_FAILED` until reboot (downloads and cache flushes stop, web banner + on-screen notice)
+  - `fs_atomic_write()` / `fs_atomic_write_cb()` / `fs_atomic_rename()` — the one tmp+fsync+rename helper every SD writer uses; reports outcomes to `sd_health` and retries once after `sd_repair` heals the directory
+  - `sd_repair_heal_for_write()`, `sd_repair_fat_mirror()` — self-healing for card-inflicted FAT32 damage (misplaced 16 KB pages): a directory that hides its own new entries is quarantined to `{root}/lost/` and recreated; at boot FAT1 sectors that hold foreign data are restored from FAT2 before FatFS touches the FAT. Counters in `/status` (`sd_repair`) and `/api/playsets/active` (`sd_repairs_boot`, `sd_repairs_total`); a once-per-boot on-screen notice (`P3A_CHANNEL_MSG_SD_REPAIRED`, 20 s TTL, consumed by `p3a_render` via `sd_repair_take_pending_overlay()`); the persisted total resets on an on-device format. Diagnostic builds (`CONFIG_P3A_SD_RAW_DEBUG`) add read-only `GET /api/debug/sd/{info,read,ls,stat}` for host-side inspection with `requests/01-sd-card-intermittent-failure/fat_inspect.py`
   - `p3a_boot_logo_init()` — intro manager: picks one of 22 intro animations per boot (random or forced via NVS `intro_anim_force`), duration from NVS `intro_anim_ms` (1000..7500 ms, default 3000); `GET /api/intro-animations` + Settings → Display web UI
 
 ## 2. play_scheduler — Deterministic Multi-Channel Playback Engine

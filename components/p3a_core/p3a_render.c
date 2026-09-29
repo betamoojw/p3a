@@ -10,6 +10,7 @@
 #include "p3a_state.h"
 #include "p3a_boot_logo.h"
 #include "sd_health.h"
+#include "sd_repair.h"
 #include "p3a_board.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -88,6 +89,7 @@ static const char *channel_msg_type_to_string(p3a_channel_msg_type_t type)
         case P3A_CHANNEL_MSG_LOADING: return "Loading channel";
         case P3A_CHANNEL_MSG_ERROR: return "Failed to load channel";
         case P3A_CHANNEL_MSG_SD_FAILED: return "SD card error";
+        case P3A_CHANNEL_MSG_SD_REPAIRED: return "SD card repaired";
         default: return "Unknown";
     }
 }
@@ -104,7 +106,9 @@ static int channel_msg_priority(p3a_channel_msg_type_t type)
 {
     switch (type) {
         case P3A_CHANNEL_MSG_SD_FAILED:
-            return 3;   // hardware failure outranks everything (shown once/boot)
+            return 4;   // hardware failure outranks everything (shown once/boot)
+        case P3A_CHANNEL_MSG_SD_REPAIRED:
+            return 3;   // the card corrupted data and p3a coped: above channel errors, below failure
         case P3A_CHANNEL_MSG_ERROR:
         case P3A_CHANNEL_MSG_DOWNLOAD_FAILED:
         case P3A_CHANNEL_MSG_EMPTY:
@@ -173,6 +177,18 @@ esp_err_t p3a_render_frame(uint8_t *buffer, size_t stride, p3a_render_result_t *
                                                    "Saving and downloads are disabled.\n"
                                                    "Power off, replace or format\n"
                                                    "the SD card, then boot again.",
+                                                   20000);
+            }
+            // Same pull model for sd_repair: the first directory quarantine
+            // or FAT restore of the boot arms one 20s notice. The web UI
+            // banner carries the counts; this is the passer-by's heads-up
+            // that the card is losing data.
+            if (sd_repair_take_pending_overlay()) {
+                p3a_render_set_channel_message_ttl("SD card", P3A_CHANNEL_MSG_SD_REPAIRED, -1,
+                                                   "SD card repaired.\n"
+                                                   "The card is corrupting data.\n"
+                                                   "Back it up and replace it.\n"
+                                                   "Details in the web UI.",
                                                    20000);
             }
             // Auto-dismiss an expired channel message (e.g. the 429 rate-limit

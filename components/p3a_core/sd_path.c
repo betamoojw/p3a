@@ -8,6 +8,7 @@
 
 #include "sd_path.h"
 #include "sd_health.h"
+#include "sd_repair.h"
 #include "config_store.h"
 #include "esp_log.h"
 #include <string.h>
@@ -233,6 +234,14 @@ esp_err_t sd_path_ensure_parent_dirs(const char *filepath)
         struct stat st;
         if (stat(tmp, &st) != 0) {
             if (mkdir(tmp, 0755) != 0 && errno != EEXIST) {
+                // ENOENT here means the parent hides its own entries (a
+                // directory the card overwrote): sd_repair quarantines and
+                // recreates the whole missing chain.
+                if ((errno == ENOENT || errno == EACCES) && sd_repair_heal_for_write(filepath) == ESP_OK) {
+                    ESP_LOGW(TAG, "parent directory repaired for %s", filepath);
+                    sd_health_report_write_ok(filepath);
+                    return ESP_OK;
+                }
                 ESP_LOGE(TAG, "mkdir failed: %s (%s)", tmp, strerror(errno));
                 // This mkdir runs ahead of the caller's fs_atomic write, so a
                 // failing card must be reported here too — otherwise the save

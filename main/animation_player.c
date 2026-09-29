@@ -10,6 +10,7 @@
 #include "esp_heap_caps.h"
 #include "sd_path.h"
 #include "sd_health.h"
+#include "sd_repair.h"
 #include "play_scheduler.h"
 #include "active_playset_store.h"
 #include "psram_alloc.h"
@@ -129,6 +130,23 @@ static esp_err_t mount_sd_and_discover(char **animations_dir_out)
             return sd_err;
         }
         s_sd_mounted = true;
+
+        // FAT mirror self-check (sd_repair): the card may have overwritten
+        // FAT1 sectors with foreign data; restore them from FAT2 before any
+        // FatFS operation reads the FAT. Remount after a repair so nothing
+        // stale survives in FatFS's window.
+        sd_repair_fat_stats_t fat_stats;
+        sd_repair_fat_mirror(bsp_sdcard, true, &fat_stats);
+        if (fat_stats.repaired_fat1 || fat_stats.repaired_fat2) {
+            bsp_sdcard_unmount();
+            esp_err_t re = bsp_sdcard_mount();
+            if (re != ESP_OK) {
+                ESP_LOGE(TAG, "Remount after FAT repair failed: %s", esp_err_to_name(re));
+                s_sd_mounted = false;
+                sd_health_report_mount_failed();
+                return re;
+            }
+        }
 
 #if CONFIG_P3A_FORCE_FRESH_SDCARD
         // Debug: Erase SD card p3a directory to simulate fresh boot

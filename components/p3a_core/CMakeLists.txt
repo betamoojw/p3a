@@ -37,6 +37,7 @@ idf_component_register(
         "sd_path.c"
         "sd_health.c"
         "fs_atomic.c"
+        "sd_repair.c"
         "fresh_boot.c"
     INCLUDE_DIRS
         "include"
@@ -53,6 +54,7 @@ idf_component_register(
         esp_netif
         lwip
         event_bus
+        sdmmc
     PRIV_REQUIRES
         json
 )

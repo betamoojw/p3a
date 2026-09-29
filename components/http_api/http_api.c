@@ -504,6 +504,11 @@ static esp_err_t h_get_router(httpd_req_t *req) {
         return h_get_debug_frames_route(req);
     }
 #endif
+#if CONFIG_P3A_SD_RAW_DEBUG
+    if (strncmp(uri, "/api/debug/sd/", 14) == 0) {
+        return h_get_debug_sd_route(req);
+    }
+#endif
 
     // Core JSON endpoints
     if (strcmp(uri, "/api/init") == 0) {

@@ -842,6 +842,10 @@ body {
     <h4>&#9888; SD Card Failure</h4>
     <p>The SD card is not working. Saving and downloads are disabled, playback may continue from cached files. Please power off, replace or reformat the SD card, and restart the device. To reformat the card, use the Format option in the on-screen menu (long-press the screen).</p>
 </div>
+<div class="cooldown-banner" id="sd-repaired-banner">
+    <h4>&#9888; SD Card Corruption Repaired</h4>
+    <p>p3a found folders on the SD card that the card itself had overwritten and repaired them (<span id="sd-repairs-boot">0</span> since power-on, <span id="sd-repairs-total">0</span> in total). Cached artwork is downloaded again as needed; whatever was in a damaged folder is kept in the <code>lost/</code> folder on the card for inspection. A card that needs repairing is losing data: back it up and consider replacing it.</p>
+</div>
 <div class="cooldown-banner" id="giphy-cooldown-banner">
     <h4>&#9203; Giphy Rate Limited</h4>
     <p>The Giphy API key hit its limit of 100 requests per hour. Device is now waiting before refreshing Giphy channels.</p>
@@ -3010,6 +3014,14 @@ function pollActivePlayset(attempt) {
                 // sticky until reboot — toggle unconditionally on the flag.
                 document.getElementById('sd-failed-banner').style.display =
                     (resp.data.sd_card_failed === true) ? 'block' : 'none';
+                // SD-repair banner: sd_repair quarantined a directory the card
+                // had overwritten. Soft tone: playback and caching continue.
+                var sdRepBoot = resp.data.sd_repairs_boot || 0;
+                var sdRepTotal = resp.data.sd_repairs_total || 0;
+                document.getElementById('sd-repairs-boot').textContent = sdRepBoot;
+                document.getElementById('sd-repairs-total').textContent = sdRepTotal;
+                document.getElementById('sd-repaired-banner').style.display =
+                    (sdRepBoot > 0) ? 'block' : 'none';
                 // Makapix registration banner: the active playset has non-open
                 // Makapix channels but the device has no usable registration, so
                 // they stay empty. Like the giphy auth/no-key banners, it's a

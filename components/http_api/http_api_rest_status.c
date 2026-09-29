@@ -33,6 +33,7 @@
 #include "makapix_renewal.h"
 #include "p3a_current_post.h"
 #include "sd_health.h"
+#include "sd_repair.h"
 #include "play_scheduler.h"
 #include "playset_json.h"
 #include "playback_service.h"
@@ -596,6 +597,23 @@ esp_err_t h_get_status(httpd_req_t *req) {
     // SD-failure latch (diagnostics parity with /playsets/active, which
     // drives the home-page banner).
     cJSON_AddBoolToObject(data, "sd_card_failed", sd_health_is_failed());
+
+    // Self-healing counters (sd_repair): directory quarantines and the boot
+    // FAT mirror check. Non-zero means the card is corrupting data.
+    {
+        cJSON *rep = cJSON_CreateObject();
+        const sd_repair_fat_stats_t *fs = sd_repair_fat_stats();
+        cJSON_AddNumberToObject(rep, "dir_repairs_boot", sd_repair_count_boot());
+        cJSON_AddNumberToObject(rep, "dir_repairs_total", sd_repair_count_total());
+        cJSON_AddBoolToObject(rep, "fat_check_ran", fs->ran);
+        cJSON_AddNumberToObject(rep, "fat_sectors", fs->fat_sectors);
+        cJSON_AddNumberToObject(rep, "fat_mismatched", fs->mismatched);
+        cJSON_AddNumberToObject(rep, "fat1_restored", fs->repaired_fat1);
+        cJSON_AddNumberToObject(rep, "fat2_restored", fs->repaired_fat2);
+        cJSON_AddNumberToObject(rep, "fat_unrepairable", fs->unrepairable);
+        cJSON_AddNumberToObject(rep, "fat_check_ms", fs->elapsed_ms);
+        cJSON_AddItemToObject(data, "sd_repair", rep);
+    }
 
     // API version for compatibility checking. P3A_API_VERSION is injected
     // globally by the root CMakeLists.txt (add_compile_definitions before

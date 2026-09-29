@@ -36,6 +36,7 @@
 
 #include "p3a_board.h"
 #include "sd_health.h"
+#include "sd_repair.h"
 #include "sd_format.h"
 #include "animation_player.h"     // begin_sd_export, is_sd_export_locked, app_get_screen_rotation
 #include "display_renderer.h"     // display_renderer_get_rotation
@@ -268,6 +269,7 @@ static void sd_format_worker(void *arg)
     err = esp_vfs_fat_sdcard_format(BSP_SD_MOUNT_POINT, bsp_sdcard);
     if (err == ESP_OK) {
         apply_volume_label();
+        sd_repair_reset_total();  // fresh filesystem: the repair history starts over
         ESP_LOGI(TAG, "done, rebooting");
         s_notice_deadline_us = esp_timer_get_time() + (int64_t)SDFMT_REBOOT_NOTICE_MS * 1000;
         s_phase = SD_FORMAT_REBOOTING;
@@ -441,6 +443,7 @@ static void run_fatal_format(void)
 
     if (err == ESP_OK) {
         apply_volume_label();
+        sd_repair_reset_total();  // fresh filesystem: the repair history starts over
         bsp_sdcard_unmount();  // best-effort clean unmount before reboot
         ESP_LOGI(TAG, "done, rebooting");
         s_notice_deadline_us = esp_timer_get_time() + (int64_t)SDFMT_REBOOT_NOTICE_MS * 1000;

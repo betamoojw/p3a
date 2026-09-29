@@ -226,6 +226,17 @@ menu "Physical Player of Pixel Art (P3A)"
                 to expose the SD card as a USB drive.
     endmenu
 
+    menu "Diagnostics"
+        config P3A_SD_RAW_DEBUG
+            bool "SD raw-inspection debug endpoints"
+            default n
+            help
+                Serves read-only GET /api/debug/sd/{info,read,ls,stat} so a host
+                can dump raw card sectors and compare them with what FatFS
+                enumerates, without a USB MSC session. Diagnostic builds only
+                (requests/01-sd-card-intermittent-failure). Zero code when off.
+    endmenu
+
     # PICO-8 Monitor configuration moved to components/pico8/Kconfig
 
 endmenu
