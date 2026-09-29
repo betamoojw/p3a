@@ -196,8 +196,17 @@ Results of the 9 hours on the fixed build:
 - Two cached artworks failed to read or decode (`giphy/32/29`,
   `vault/20/54`), most likely chains through the 75 unrepairable FAT
   sectors; the existing corrupt-file handling deleted them for re-download.
-- Side observation: all 46 Minneapolis (artsmia) image requests returned
-  HTTP 403 overnight. Separate issue, same shape as the AIC block.
+- Side observation: 46 Minneapolis (artsmia) image requests returned
+  HTTP 403 overnight. Investigated 2026-09-29: not a block on p3a. Every
+  such object also 403s from a PC on all three size buckets with an S3
+  AccessDenied body, meaning the rendition was never generated even
+  though the search index marks the image valid. This is the known Mia
+  data gap (139 of 2574 public-domain Paintings today, up from 40 of
+  1024 in August; upstream issue artsmia/collection-elasticsearch#10,
+  still unanswered). The download tombstone handled it as designed: 55
+  entries tombstoned after 5 attempts each. The logs look worse than
+  the 5% rate because cached artworks are never re-requested, so the
+  download loop keeps cycling through the dead tail.
 
 Release-configuration build (`build-rel/`, tracked `sdkconfig`, no debug
 overlay) flashed in the morning: `/api/debug/sd/*` returns 404, the boot FAT
