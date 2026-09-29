@@ -153,9 +153,13 @@ services:
 | Smithsonian | IDS | `ids.si.edu/ids/iiif/` |
 
 Seven independently operated image stacks, one line of URL
-construction. The shared IIIF helpers used by all adapters are 59 lines
-of C. This is the standards success story and the people who wrote and
-implemented the Image API should hear it.
+construction per museum: the template is a single formatted string
+inside each adapter's URL builder (13 to 25 lines with the plumbing
+around it). `museums/common.c` (59 lines) holds only a User-Agent
+builder and a percent-encoder, nothing IIIF; the earlier "59 shared
+IIIF lines" claim was wrong (grilling round 1, 2026-09-11). This is the
+standards success story and the people who wrote and implemented the
+Image API should hear it.
 
 `!720,720` never crops: across about 90 reported-versus-delivered
 comparisons (2026-08-25 survey), the delivered aspect ratio equalled the
@@ -168,7 +172,12 @@ learn sizes and features, choose. p3a never does. The panel is 720x720,
 `!720,720` has been universally honored, and skipping negotiation
 halves the request count. In the months since the feature shipped
 (2026-05-15) the shortcut has not misfired once. Where advertisement and
-reality diverge, they diverge the other way (SMK, section 7).
+reality diverge, they diverge the other way (SMK, section 7). `!w,h` is
+a Level 2 feature in Image API 2.1 and 3.0; a Level 0 static server
+would not serve it, and all seven museums run Level 1 or 2 servers.
+Fallback planned: on a 400 or 404, read `info.json` once per host and
+pick the largest listed size that fits 720 (grilling round 1,
+2026-09-11).
 
 **JPEG only.** Museum IIIF servers serve JPEG far more reliably than
 WebP, and the ESP32-P4 has a hardware JPEG decoder with sharp limits: it
@@ -373,11 +382,12 @@ primitives.
 | Wellcome Collection | 438 |
 | Statens Museum for Kunst | 406 |
 | Victoria and Albert Museum | 399 |
-| Shared IIIF helpers, used by all | 59 |
+| `common.c` (User-Agent builder and percent-encoder; no IIIF) | 59 |
 
-Fifty-nine shared lines cover everything the standard standardized. The
-other 4,700 are the difference between "has an API" and "has the same
-API". The core component around the adapters is another 994 lines
+One line per museum covers everything the standard standardized; the
+3,740 lines across the seven IIIF adapters are the difference between
+"has an API" and "has the same API" (the two CDN adapters add 966).
+The core component around the adapters is another 994 lines
 (dispatch, refresh, download, resolve, rate limit).
 
 ## 6. Could IIIF Presentation have been the discovery layer?
@@ -450,8 +460,10 @@ For a standard 1,024-artwork channel: the bespoke path costs 10-20 HTTPS
 requests (140 KB at AIC, ~2 MB at SMK). A Presentation-only path costs
 the Collection walk plus about 1,000 manifest GETs: ~2.5 MB at AIC-sized
 manifests, over 100 MB at Wellcome-sized ones. A 50-100x request
-multiplier for a client that pays a TLS round trip per request, and at
-the end the client still has no counts and no offsets.
+multiplier for a client that pays a round trip and a quota unit per
+request (the firmware reuses no HTTP connections today; handle reuse is
+planned and would cut handshakes, not request counts), and at the end
+the client still has no counts and no offsets.
 
 Probe commands to re-run the week before the talk (curl, with an
 identifying User-Agent):
@@ -739,7 +751,7 @@ implementation detail.
 | Display | 720x720, 4-inch IPS, 24-bit, capacitive touch |
 | Firmware | C on ESP-IDF v5.5, FreeRTOS, Apache 2.0, v1.2.1 |
 | Museums | 9 shipped; 7 over IIIF Image API v2; 2 fixed-rendition CDNs; AIC dormant |
-| Adapter code | ~4,700 lines of C across 9 adapters; 59 shared IIIF lines; 994 lines of core; ~3,060 lines of browser-side JS |
+| Adapter code | ~4,700 lines of C across 9 adapters (3,740 in the seven IIIF adapters, 966 in the two CDN adapters); one IIIF template line per adapter; 994 lines of core; ~3,060 lines of browser-side JS |
 | Artwork record | 64 bytes; 48 for the image id |
 | Channel identifier slot | 33 bytes |
 | Cache | 1,024 artworks per channel by default, max 4,096; 64 channels max |

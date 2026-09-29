@@ -24,3 +24,9 @@ build-trace/
 
 # Content-sources showcase (untracked working folder, see content-sources-showcase/)
 content-sources-showcase/
+
+# Python bytecode caches (host/ tooling)
+__pycache__/
+
+# Release-config build output (see AGENTS.md build notes)
+build-rel/

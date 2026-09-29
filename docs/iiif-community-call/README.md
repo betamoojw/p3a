@@ -34,7 +34,29 @@ map live in this file; the content lives in the files it points to.
   (`v1/`) drafted. Nothing rehearsed yet.
 - 2026-09-08, later: decks organized into version folders. `v2/` drafted
   as a sparse, bullet-driven deck (21 slides) with everything that left
-  the slides moved into expanded speaker notes. **`v2/` is current.**
+  the slides moved into expanded speaker notes.
+- 2026-09-11: grilling round 1 (`grilling.md`). Found that the "59 lines
+  of shared C" figure is wrong (that file is a User-Agent and a URL
+  encoder; the IIIF template is one line per adapter), that the firmware
+  reuses no HTTP connections, and that Harvard `collections/object`
+  still 500s and Wellcome facet children still 503.
+- 2026-09-17: `v3/` drafted (41 slides) from a third interview (8
+  questions, 2 rounds). Product half expanded (channels, playsets,
+  everyday use, owner's journey, context), the four-beat road to museums
+  (pixel-art player, AI scouting, the UBI built separately, the UBI as
+  reference), grilling round 1 corrections folded in, hardware limits
+  separated from project choices, no conclusion slide. Ten screenshots
+  captured from the dev unit and the UBI test app into `screenshots/`.
+  Per-slide suggested durations replace cumulative time marks; Fab trims
+  to 30 minutes. The stale "59 lines" and "TLS round trip per request"
+  claims were also corrected in `material.md`. **`v3/` is current.**
+  Not rehearsed, not yet trimmed.
+- 2026-09-17, later: v3's notes rewritten from bullet prompts into the
+  full spoken script (about 8,577 words, about 61 minutes at
+  140 words a minute), one slide at a time, from a fourth interview (7
+  questions, 2 rounds). Each slide's notes now hold a duration mark
+  computed from its word count, the words to say, bracketed stage cues,
+  and a short "If asked" block of reserve facts.
 
 ## Versions
 
@@ -47,7 +69,8 @@ git-ignored exports.
 | Version | Slides | Character | Status |
 |---|---|---|---|
 | `v1/` | 32 (5 section dividers) | Verbose: full sentences and paragraphs on slides, bullet-prompt notes. | Superseded, kept for reference. |
-| `v2/` | 21 | Sparse: headline plus up to five short bullets, two tables (nine museums, adoption probe), two allowed exceptions (nine quirk one-liners, seven checklist items). Expanded bullet notes carry every fact and number that left the slides, with cumulative time marks. | Current. Not rehearsed. |
+| `v2/` | 21 | Sparse: headline plus up to five short bullets, two tables (nine museums, adoption probe), two allowed exceptions (nine quirk one-liners, seven checklist items). Expanded bullet notes carry every fact and number that left the slides, with cumulative time marks. | Superseded by v3, kept for reference. |
+| `v3/` | 41 | Sparse like v2, expanded to be trimmed: 18 product and journey slides, 23 IIIF-perspective slides, ten screenshots, `hardware` and `choice` tags. Notes are the spoken script: a `[~m:ss]` mark computed from the word count at 140 words a minute, the words to read, bracketed stage cues, and an "If asked" block. About 8,577 words, about 61 minutes untrimmed; a 30-minute cut keeps about 22 slides. | Current. Not rehearsed, not yet trimmed. |
 
 To start a v3: copy the current version folder, edit `slides.md`, add a
 row here.
@@ -122,6 +145,83 @@ Added for v2 (2026-09-08, second interview):
     slide; "what is changing" folded into the checklist notes; "try it"
     folded into the closing slide.
 
+Added for v3 (2026-09-17, third interview):
+
+27. **Goal split:** 40% p3a as a product, 60% how IIIF looks from p3a's
+    perspective. Generate more than fits; Fab trims. Every slide must
+    still earn its place.
+28. **The road to museums, four beats,** told before the museum
+    channels: a pixel-art player; asking a model to scout the internet
+    (this beat carries the AI disclosure); the UBI (unified browsing
+    interface, repo name museum-ubi) built separately to prove the
+    sources; the UBI as technical reference for the firmware. The May 5
+    "Chicago plus NASA APOD" first plan is one line in the scouting
+    notes; APOD is not named on a slide.
+29. **Product slides beyond what/how/channels/playsets:** the owner's
+    journey (fifteen minutes), everyday use, and context. Makapix Club
+    gets no slide of its own.
+30. **Ending:** no conclusion slide and no push-back ask. The seven-item
+    checklist is the last content slide, then thanks. The ask-backs from
+    the grilling live in the thank-you notes, for silence.
+31. **Inherent versus chosen.** Hardware: 720 × 720, the RAM totals, the
+    JPEG decoder's limits, the TLS fingerprint, no browser, and the
+    RAM-derived budgets (two TLS sessions, parse buffers, streaming to
+    the card). Project choices: the 64-byte record and 48-byte id (a
+    16 MB budget so 64 channels × 4,096 records fit in RAM at once), the
+    33-byte channel id, no `info.json`, JPEG-only for museums, no
+    metadata on the device, no middleman or harvester, the three
+    discovery primitives. One slide draws the split; `hardware` and
+    `choice` tags mark it elsewhere. Never present a choice as a limit.
+32. **Grilling round 1 folded in:** one line of C per museum (1 versus
+    3,740 across the seven IIIF adapters); "a round trip and a quota
+    unit per request"; `info.json` as "a Level 2 bet, won so far;
+    fallback planned"; the Presentation 3.0 change-log sentence on the
+    specification slide; the thumbnail qualifier on the economics slide;
+    two new slides for the counter-cases (thumbnails in Collections,
+    harvest elsewhere). HTTP handle reuse and the `info.json` fallback
+    are still planned; the notes carry the "fixed since" wording to swap
+    in if either ships before the call.
+33. **Size and style:** about 40 slides in v2's sparse style, with a
+    suggested duration per slide. Of the three "deliberate
+    simplifications", only `info.json` stays on a slide; JPEG-only and
+    stream-never-buffer are hardware-column facts in the notes.
+34. **Maker-audience material** (progressive-JPEG fallback, chunked
+    streaming, per-museum parse buffers, the one-byte state machine, the
+    CORS-baked set list) lives in the notes of the slide it supports.
+    Not on slides, not cut.
+35. **Visuals:** screenshots captured 2026-09-17 from the dev unit
+    (`p3a-fab.local`: playset editor, channel cards, the browse modal at
+    three steps, home, info card, museum settings) and from the UBI test
+    app served locally (`reference/museum-art/ubi-test`,
+    `python -m http.server 8765`). Stored in `screenshots/` at the top
+    level, shared by every version.
+
+Added for the v3 script (2026-09-17, fourth interview):
+
+36. **Notes are the talk, verbatim.** Each slide's notes are the words
+    to read aloud, first person, written to that slide's duration at
+    140 words a minute. The `[~m:ss]` mark is computed from the word
+    count by `set_durations.py` in this folder, so it is honest after
+    every edit; re-run it after trimming and it re-sums the README too.
+37. **Voice:** conversational, contractions, dry humor allowed, never
+    apologetic, American spelling, no em dashes.
+38. **What else lives in the notes:** bracketed stage cues (`[pause]`,
+    `[point at the figure]`, `[play the clip]`) and a short "If asked"
+    block of reserve facts under each script. Nothing unspoken beyond
+    that; the rest stays in material.md, qa-prep.md, grilling.md.
+39. **AI tools are named** on the scouting slide: Cursor, Claude Code,
+    Anthropic's models, followed by "no affiliation".
+40. **Direct asides** to museum staff who may be on the call (Wellcome
+    and Harvard on the probe slide, SMK on the two-museum slide, WAF
+    operators on the bot-defense slide). The opening carries the
+    placeholders `[host name]` and `[the Slack member who invited me]`.
+41. **Video narration** is keyed to the seven shots of
+    `video-shot-list.md`, with a line saying what to skip over the
+    fallback clip.
+42. **Transitions flow:** each script ends by setting up the next slide.
+    After trimming, fix the seams (the last sentence of each surviving
+    slide and the first of the next).
+
 ## Files
 
 | File | What |
@@ -129,9 +229,12 @@ Added for v2 (2026-09-08, second interview):
 | `README.md` | This file: event facts, status, decisions, file map. |
 | `material.md` | Everything that might go into the talk: facts, numbers, stories, timeline, quotes, asset inventory, with pointers to the sources in the repo. |
 | `qa-prep.md` | Anticipated questions from an IIIF audience with drafted answers. |
+| `grilling.md` | Mock Q&A run as a class: hard questions, spoken answers, the facts behind them, and the deck changes each one forces. Round 1 on 2026-09-11. |
 | `video-shot-list.md` | Shot list for the 60-90 second demo clip. |
+| `set_durations.py` | Recomputes each v3 slide's `[~m:ss]` mark from its spoken word count at 140 words a minute and refreshes the totals in this README. Run after any edit to `v3/slides.md`. |
 | `figure-architecture.svg` | The article's architecture figure with its counts updated to nine museums. Shared by every version. |
-| `v1/slides.md`, `v2/slides.md` | The Marp decks. Speaker notes with cumulative time marks are the HTML comments under each slide. |
+| `screenshots/` | Ten JPEGs (862 × 1400) captured 2026-09-17: `playset-editor`, `playset-editor-channels`, `browse-modal-museums`, `browse-modal-rijks-sets`, `browse-modal-preview`, `home`, `home-info`, `settings-museum` from the dev unit; `ubi-test-home`, `ubi-test-collection` from the UBI test app. Shared by every version; recapture after a web UI change. |
+| `v1/slides.md`, `v2/slides.md`, `v3/slides.md` | The Marp decks. Speaker notes are the HTML comments under each slide: bullet prompts with cumulative time marks in v1 and v2; in v3 the full spoken script per slide, with a computed duration mark, stage cues, and an "If asked" block. |
 | `v*/slides.pdf`, `v*/slides.pptx`, `v*/slides.html` | Exports (git-ignored, regenerate with the commands below). The video slide is a placeholder in PDF and PPTX; the HTML export plays `demo.mp4` if it sits at the top level of this folder. |
 
 ## Exporting the deck
@@ -140,7 +243,7 @@ Marp CLI runs through `npx` and uses a local Chrome or Edge for PDF and
 PPTX. Run from the repo root, substituting the version folder:
 
 ```powershell
-Set-Location docs/iiif-community-call/v2
+Set-Location docs/iiif-community-call/v3
 npx --yes @marp-team/marp-cli slides.md --allow-local-files --html --pdf -o slides.pdf
 npx --yes @marp-team/marp-cli slides.md --allow-local-files --html --pptx -o slides.pptx
 npx --yes @marp-team/marp-cli slides.md --allow-local-files --html -o slides.html
@@ -159,6 +262,15 @@ serves the folder at http://localhost:8080.
 
 ## Before the talk
 
+- [ ] Trim v3 to about 22 slides; sum the `[~m:ss]` durations in the
+      notes to 30:00. Cut the product half harder than the IIIF half
+      (target 40/60). Then fix the transition sentences at the seams and
+      fill in `[host name]` and `[the Slack member who invited me]` on
+      the title slide.
+- [ ] Decide whether to implement HTTP handle reuse and the `info.json`
+      fallback before the call. If either ships, change "planned" to
+      "fixed since <date>" on the `info.json` slide, the economics slide,
+      and the polite-client notes.
 - [ ] Shoot the demo clip (`video-shot-list.md`) and drop it in this
       folder as `demo.mp4`; the video slide links to that name.
 - [ ] Re-test AIC on the device the week before; update the coverage
