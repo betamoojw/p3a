@@ -13,9 +13,14 @@
 > unaffected. Firmware marks AIC unavailable via `unavailable_reason` in
 > `art_institution.c`'s dispatch table (refresh/downloads skipped, cached art
 > keeps playing, badge + banner in the web UI, browse gated in
-> `webui/museum/artic.js`). Revert by clearing that field and
+> `webui/museum/artic.js`). `/playsets/active` exposes the per-museum state as
+> a `museum_unavailable` map. Revert by clearing that field and
 > `ARTIC_UNAVAILABLE` if AIC unblocks access — tracked upstream at
-> art-institute-of-chicago/data-aggregator#151. AIC design content below is
+> art-institute-of-chicago/data-aggregator#151 (open and unanswered since
+> ~2025-12; AIC's docs still claim CORS hotlinking works). Verified with no
+> UA, header, HTTP/1.1, alternate-host, or wsrv.nl-proxy bypass; the rare
+> transient 200 windows seen right after a browser on the same IP passed the
+> challenge are not usable. AIC design content below is
 > unchanged and still authoritative for the (currently dormant) adapter.
 
 p3a v1 supports artwork from Makapix, Giphy, and the local SD card. This
@@ -622,7 +627,15 @@ about breadth-of-collection.
   no-op (`ESP_LOGI` + return `ESP_OK`, no `last_refresh` write) and the
   browse modal surfaces "enter your key in Settings" instead of axes.
   Channels saved while the key is configured remain persistent across
-  reboots; clearing the key only dormants the refresh path.
+  reboots; clearing the key only dormants the refresh path. The key gates
+  **discovery only**: playback and image download use keyless NRS/IDS
+  URLs, so a cached HAM channel keeps playing without a key. The
+  key-missing state comes from the per-museum `api_key_missing()`
+  callback on `art_institution_museum_t` (NULL for non-BYOK museums),
+  wrapped by `art_institution_api_key_missing(museum_id)`; `/playsets/active`
+  emits `museum_key_missing: {ham, si}` for the web UI's needs-key badge
+  and banner, and the on-device "no files" branch names the keyless
+  museum ("Needs an API key. Add it in Settings > Museums.").
 - **Axes (filterable, in browse order):**
   `classification`, `century`, `culture`, `period`, `place`, `medium`,
   `technique`, `worktype`, `group`, `gallery`. The browser-side adapter
@@ -689,7 +702,10 @@ about breadth-of-collection.
   api.data.gov/signup/). When the saved key is empty, refresh is a no-op
   (`ESP_LOGI` + return `ESP_OK`, no `last_refresh` write) and the browse
   modal surfaces "enter your key in Settings" instead of the unit list.
-  Behavior on key clear mirrors HAM.
+  Behavior on key clear mirrors HAM, including the discovery-only scope:
+  image downloads go to `ids.si.edu` without the key, so cached SI
+  channels keep playing, and the same `api_key_missing()` /
+  `museum_key_missing` surfacing applies.
 - **Axes:** one — `unit` (Smithsonian's administrative units). The v1
   wired set in `webui/museum/smithsonian.js` is six art-bearing units:
   CHNDM (Cooper Hewitt), SAAM (American Art), NPG (Portrait Gallery),
@@ -861,6 +877,17 @@ about breadth-of-collection.
 - **Single-record lookup:** query `id:{id}` on the same search endpoint
   — used by `fetchMetadataByIiifKey`.
 - **Rate limit:** none published; default 60 s cooldown on a 429.
+- **Dead-rendition gap (known, upstream):** a slice of records flagged
+  `image:valid` have no S3 pre-render on any bucket and 403 from every
+  client, including desktop browsers; the download tombstone above
+  absorbs them. Census of all Public Domain paintings: 40/1024 dead on
+  2026-08-24, 139/2574 (5.4%) on 2026-09-29, clustered in object ids
+  ≥ 140000 (newer accessions). `search.artsmia.org` answers 200 to every
+  User-Agent including the firmware's, so this is not a block. Reported
+  upstream as artsmia/collection-elasticsearch#10 (id lists posted
+  2026-08-24 and 2026-09-29; no reply so far). Device logs during a soak
+  look worse than the census because cached-OK files are never
+  re-requested, so the download loop shows mostly the dead tail.
 
 ### 9.8 Statens Museum for Kunst (SMK)
 
