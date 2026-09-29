@@ -209,3 +209,54 @@ byte-identical from the GitHub release.
 
 Still untested: format resetting the persisted repair counter, and the A/B
 with a known-good card.
+
+## A/B test, 2026-09-29
+
+Same device, same firmware (diagnostic build of the branch), same SD root
+setting, same download traffic driven by a swap loop.
+
+**New card** (32 GB, fresh out of the box, FAT32 as shipped, 16 KB clusters;
+manufacturer id 111, name "SDABC", serial 2852129421):
+
+- Mounted directly; boot FAT check 0 mismatched sectors; folders created.
+- 20 minutes of downloads (288 files, 41 MB): 0 repairs, 0 anomalies in
+  349 directories, no write failures. The FAT monitor saw one transient
+  copy-1/copy-2 difference in the hottest FAT chunk that was gone on
+  re-read (a write caught between the two copies), no drift.
+- Three power cuts during active downloads (unplug, 5 s, replug; four boots
+  recorded): every boot's FAT check clean (0 mismatched, 0 restored,
+  0 unrepairable), 0 repairs, 310 files across 369 directories, 0 anomalies.
+
+**Old card** (64 GB, manufacturer id 254, name "SD", serial 249): before the
+swap it carried 111 mismatched FAT sectors (75 junk in both copies) and 217
+quarantined directories. The move to the new Wi-Fi (one power cut) added no
+FAT damage. Matched three-cut test: see below.
+
+**Old card, matched three-cut test** (same swap loop running): every boot's
+FAT check unchanged (111 mismatched, 75 unrepairable, 0 restored), no new
+repairs, 217 quarantined folders before and after. Quick cuts during
+downloads did not add FAT damage.
+
+**Directory-level check.** The 217 directories the repair had recreated
+overnight were known-clean at recreation. Scanned this morning after the
+move and the first cut round, 11 of them carried junk again (32 KB and 48 KB
+runs, at 16 KB-aligned absolute addresses, no FAT chain pointing at them, FAT
+unchanged: the card's signature, not a cross-link from the FAT repair; in 8
+of the 11 the junk sits past the end marker and does not affect FatFS).
+The damage window covers the night on power, the laptop move (one power
+cut) and the first three cuts. A second round of three cuts, bracketed by a
+hash snapshot of all 216 directories, produced nothing new: 200 identical,
+15 changed only by FatFS adding files, 1 already-damaged directory re-parsed
+differently. So a quick unplug during downloads does not reproduce the
+mechanism on demand; the card damages itself at moments this test did not
+capture (candidates: its own background housekeeping while idle or
+unpowered for longer, or a slower power decay than a 5-second cut).
+
+**A/B verdict.** Identical device, firmware, traffic and abuse: the new card
+finished with 0 damaged directories out of 369 and a clean FAT; the old card
+carries 224 quarantined directories, 75 FAT sectors junk in both copies, and
+acquired 11 new junk blocks in the 12 hours between the overnight repair and
+this morning. The old card is the fault. The self-repair kept the device
+working throughout: no latch, no user-visible failure, caches refilled.
+Repairs since boot on the old card kept landing on shards that had never been
+written since the original damage (Klipy and Giphy shards), as expected.
