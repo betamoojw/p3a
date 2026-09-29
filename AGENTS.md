@@ -118,7 +118,7 @@ described in `docs/infrastructure/architecture.md`.
 
 | Component | Purpose |
 |-----------|---------|
-| `p3a_core` | Unified state machine and lifecycle management |
+| `p3a_core` | Unified state machine and lifecycle management; also `sd_path`, `sd_health` (failure latch), `fs_atomic` (tmp+rename writes) and `sd_repair` (self-healing of card-inflicted FAT damage: quarantines overwritten directories to `lost/`, restores FAT1 from FAT2 at boot) |
 | `play_scheduler` | Playback engine that executes playsets to select artwork |
 | `channel_manager` | Playlist/channel handling, vault storage (hash-sharded `/sdcard/p3a/vault/`) |
 | `giphy` | Giphy API integration: trending GIFs, on-demand download, SD card caching (`/sdcard/p3a/giphy/`) |
@@ -170,6 +170,7 @@ header overview comment.
   - `/sdcard/p3a/giphy/`: cached Giphy artwork
   - `/sdcard/p3a/klipy/`: cached Klipy artwork
   - `/sdcard/p3a/museum/{museum_id}/`: cached art-institution artwork
+  - `/sdcard/p3a/lost/`: directories the card corrupted, quarantined by `sd_repair` (see `docs/HOW-TO-USE.md`)
 - **NVS** (64 KB): Wi-Fi credentials, settings, state.
 
 Partition sizes and offsets are in `partitions.csv`.

@@ -25,6 +25,7 @@
 #include "p3a_state.h"
 #include "p3a_current_post.h"
 #include "sd_health.h"
+#include "sd_repair.h"
 #include "giphy.h"
 #include "klipy.h"
 #include "art_institution.h"
@@ -524,6 +525,9 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     h = fnv_u8(h, makapix_reg_required ? 1 : 0);
     // SD-failure latch: flips at most once per boot (sticky), 304-friendly.
     h = fnv_u8(h, sd_health_is_failed() ? 1 : 0);
+    // Repair counter: bumps when sd_repair quarantines a directory (rare).
+    h = fnv_u8(h, (uint8_t)(sd_repair_count_boot() & 0xFF));
+    h = fnv_u8(h, (uint8_t)((sd_repair_count_boot() >> 8) & 0xFF));
     h = fnv_u8(h, cooldown_active ? 1 : 0);
     // Auth-invalid latch and no-key flag are already booleans — they flip
     // once per episode, so they're 304-friendly by nature (same rationale
@@ -639,6 +643,9 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     // SD-failure latch (boot probe or consecutive write failures): saving and
     // downloads are disabled until reboot. Drives the home-page danger banner.
     cJSON_AddBoolToObject(data, "sd_card_failed", sd_health_is_failed());
+    // Directory repairs (sd_repair): drives the home-page corruption banner.
+    cJSON_AddNumberToObject(data, "sd_repairs_boot", sd_repair_count_boot());
+    cJSON_AddNumberToObject(data, "sd_repairs_total", sd_repair_count_total());
 
     cJSON_AddNumberToObject(data, "giphy_cooldown_remaining_sec", (double)giphy_cd_sec);
 

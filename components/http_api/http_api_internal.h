@@ -198,6 +198,10 @@ esp_err_t h_post_show_url(httpd_req_t *req);
 esp_err_t h_get_debug_frames_route(httpd_req_t *req);
 esp_err_t h_post_debug_frames_route(httpd_req_t *req);   // ESP_ERR_NOT_FOUND when the URI is not ours
 #endif
+#if CONFIG_P3A_SD_RAW_DEBUG
+// SD raw-inspection (requests/01-sd-card-intermittent-failure): /api/debug/sd/*
+esp_err_t h_get_debug_sd_route(httpd_req_t *req);
+#endif
 esp_err_t h_post_swap_to(httpd_req_t *req);
 esp_err_t h_post_provision(httpd_req_t *req);
 esp_err_t h_post_makapix_unregister(httpd_req_t *req);

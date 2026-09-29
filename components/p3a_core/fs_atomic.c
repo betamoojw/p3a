@@ -8,6 +8,7 @@
 
 #include "fs_atomic.h"
 #include "sd_health.h"
+#include "sd_repair.h"
 #include "esp_log.h"
 #include <string.h>
 #include <errno.h>
@@ -45,9 +46,12 @@ static bool refuse_latched(const char *final_path)
  * Reports the outcome to sd_health.
  */
 static esp_err_t finalize_rename(const char *tmp_path, const char *final_path,
-                                 const fs_atomic_opts_t *opts)
+                                 const fs_atomic_opts_t *opts, bool *dir_repaired)
 {
     bool use_bak = opts && opts->use_bak;
+    if (dir_repaired) {
+        *dir_repaired = false;
+    }
 
     char bak_path[FS_ATOMIC_PATH_MAX];
     bool had_backup = false;
@@ -79,6 +83,17 @@ static esp_err_t finalize_rename(const char *tmp_path, const char *final_path,
     if (rename(tmp_path, final_path) != 0) {
         int rename_errno = errno;
         ESP_LOGE(TAG, "Rename failed: %s -> %s (errno=%d)", tmp_path, final_path, rename_errno);
+        // ENOENT right after a successful create+fsync in the same directory
+        // is the signature of a directory the card has overwritten (phantom
+        // entries, see sd_repair.h). Heal it; the tmp went away with the
+        // quarantined directory, so the caller has to redo the write.
+        if (rename_errno == ENOENT && sd_repair_heal_for_write(final_path) == ESP_OK) {
+            ESP_LOGW(TAG, "Directory repaired, write must be redone: %s", final_path);
+            if (dir_repaired) {
+                *dir_repaired = true;
+            }
+            return ESP_ERR_NOT_FOUND;
+        }
         unlink(tmp_path);
         if (had_backup) {
             if (rename(bak_path, final_path) != 0) {
@@ -117,37 +132,51 @@ esp_err_t fs_atomic_write_cb(const char *final_path, fs_atomic_writer_cb_t write
         return ESP_ERR_INVALID_ARG;
     }
 
-    unlink(tmp_path);  // clean orphan from a previous interrupted save
+    // One retry after a directory repair (sd_repair): the first attempt's
+    // temp file is gone with the quarantined directory.
+    for (int attempt = 0;; attempt++) {
+        unlink(tmp_path);  // clean orphan from a previous interrupted save
 
-    FILE *f = fopen(tmp_path, "wb");
-    if (!f) {
-        int open_errno = errno;
-        ESP_LOGE(TAG, "Failed to create temp file: %s (errno=%d)", tmp_path, open_errno);
-        sd_health_report_write_failure(final_path, open_errno);
-        return ESP_FAIL;
-    }
+        FILE *f = fopen(tmp_path, "wb");
+        if (!f) {
+            int open_errno = errno;
+            if (open_errno == ENOENT && attempt == 0 && sd_repair_heal_for_write(final_path) == ESP_OK) {
+                ESP_LOGW(TAG, "Directory repaired, retrying write: %s", final_path);
+                continue;
+            }
+            ESP_LOGE(TAG, "Failed to create temp file: %s (errno=%d)", tmp_path, open_errno);
+            sd_health_report_write_failure(final_path, open_errno);
+            return ESP_FAIL;
+        }
 
-    esp_err_t err = writer(f, ctx);
-    if (err != ESP_OK) {
-        // Writer errors are the caller's domain (may be network-side):
-        // clean up, but do not report to sd_health.
+        esp_err_t err = writer(f, ctx);
+        if (err != ESP_OK) {
+            // Writer errors are the caller's domain (may be network-side):
+            // clean up, but do not report to sd_health.
+            fclose(f);
+            unlink(tmp_path);
+            return err;
+        }
+
+        fflush(f);
+        if (fsync(fileno(f)) != 0) {
+            int sync_errno = errno;
+            ESP_LOGE(TAG, "fsync failed: %s (errno=%d)", tmp_path, sync_errno);
+            fclose(f);
+            unlink(tmp_path);
+            sd_health_report_write_failure(final_path, sync_errno);
+            return ESP_FAIL;
+        }
         fclose(f);
-        unlink(tmp_path);
-        return err;
-    }
 
-    fflush(f);
-    if (fsync(fileno(f)) != 0) {
-        int sync_errno = errno;
-        ESP_LOGE(TAG, "fsync failed: %s (errno=%d)", tmp_path, sync_errno);
-        fclose(f);
-        unlink(tmp_path);
-        sd_health_report_write_failure(final_path, sync_errno);
-        return ESP_FAIL;
-    }
-    fclose(f);
-
-    return finalize_rename(tmp_path, final_path, opts);
+        bool dir_repaired = false;
+        esp_err_t rerr = finalize_rename(tmp_path, final_path, opts, &dir_repaired);
+        if (dir_repaired && attempt == 0) {
+            ESP_LOGW(TAG, "Directory repaired, retrying write: %s", final_path);
+            continue;
+        }
+        return rerr;
+    }  // retry loop
 }
 
 typedef struct {
@@ -190,5 +219,7 @@ esp_err_t fs_atomic_rename(const char *tmp_path, const char *final_path,
         unlink(tmp_path);  // caller's tmp is orphaned either way; tidy up
         return ESP_ERR_INVALID_STATE;
     }
-    return finalize_rename(tmp_path, final_path, opts);
+    // A repaired directory surfaces as ESP_ERR_NOT_FOUND: the caller's tmp is
+    // gone with it and the whole download/save has to be redone.
+    return finalize_rename(tmp_path, final_path, opts, NULL);
 }

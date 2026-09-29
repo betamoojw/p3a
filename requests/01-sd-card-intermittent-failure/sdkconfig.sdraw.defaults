@@ -1,0 +1,5 @@
+# Overlay for the SD raw-inspection diagnostic build (request 01).
+# Applied on top of the tracked release sdkconfig into build-sdraw/:
+#   idf.py -B build-sdraw -DSDKCONFIG=build-sdraw/sdkconfig \
+#          -DSDKCONFIG_DEFAULTS="sdkconfig;requests/01-sd-card-intermittent-failure/sdkconfig.sdraw.defaults" build
+CONFIG_P3A_SD_RAW_DEBUG=y
