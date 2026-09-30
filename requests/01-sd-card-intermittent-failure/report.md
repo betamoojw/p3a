@@ -304,8 +304,11 @@ one `SD repair notice raised` line at 105 s, none for the second repair,
 which landed after the first notice's 20 s had run out and would have raised
 a second box before the fix. The boot FAT check restored nothing on that
 boot, so the path where the FAT restore arms the notice and a later
-quarantine stays silent was not exercised. Not yet confirmed by eye on the
-screen.
+quarantine stays silent was not exercised.
+
+Confirmed by eye the same day: Fab saw the message box once since that boot.
+`/status` at 16 minutes of uptime on the same boot showed three quarantines
+and no SD-failure latch, so three repairs produced one notice.
 
 Still open: the 20 s is an upper bound. A successful artwork swap clears the
 message slot, so a notice armed by the boot FAT restore may be dismissed by
