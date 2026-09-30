@@ -184,6 +184,7 @@ esp_err_t p3a_render_frame(uint8_t *buffer, size_t stride, p3a_render_result_t *
             // banner carries the counts; this is the passer-by's heads-up
             // that the card is losing data.
             if (sd_repair_take_pending_overlay()) {
+                ESP_LOGI(TAG, "SD repair notice raised (once per boot, 20 s)");
                 p3a_render_set_channel_message_ttl("SD card", P3A_CHANNEL_MSG_SD_REPAIRED, -1,
                                                    "SD card repaired.\n"
                                                    "The card is corrupting data.\n"

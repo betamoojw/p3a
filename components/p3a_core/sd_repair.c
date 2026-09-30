@@ -50,7 +50,8 @@ static sd_repair_fat_stats_t s_fat_stats;
 static uint32_t s_boot_repairs = 0;
 static uint32_t s_total_repairs = 0;
 static bool s_total_loaded = false;
-static bool s_overlay_pending = false;   // armed by the first repair of the boot
+static bool s_overlay_armed = false;     // latch: the notice was armed this boot (a format clears it)
+static bool s_overlay_pending = false;   // armed and not yet taken by the render loop
 static portMUX_TYPE s_lock = portMUX_INITIALIZER_UNLOCKED;
 
 // ----------------------------------------------------------------------------
@@ -85,13 +86,24 @@ static void store_total(uint32_t v)
     nvs_close(h);
 }
 
+// Caller holds s_lock. Only the first repair of the boot arms the on-screen
+// notice; later ones move the counters, not the screen (a faulty card can
+// need several repairs in the minutes after boot).
+static void arm_overlay_once_locked(void)
+{
+    if (!s_overlay_armed) {
+        s_overlay_armed = true;
+        s_overlay_pending = true;
+    }
+}
+
 static void count_repair(void)
 {
     load_total();
     portENTER_CRITICAL(&s_lock);
     s_boot_repairs++;
     uint32_t total = ++s_total_repairs;
-    s_overlay_pending = true;
+    arm_overlay_once_locked();
     portEXIT_CRITICAL(&s_lock);
     store_total(total);
 }
@@ -124,6 +136,7 @@ void sd_repair_reset_total(void)
     portENTER_CRITICAL(&s_lock);
     s_total_repairs = 0;
     s_total_loaded = true;
+    s_overlay_armed = false;    // fresh filesystem: a new repair is news again
     portEXIT_CRITICAL(&s_lock);
     store_total(0);
 }
@@ -550,7 +563,7 @@ esp_err_t sd_repair_fat_mirror(sdmmc_card_t *card, bool fix, sd_repair_fat_stats
     s_fat_stats.ran = true;
     if (fix && (s_fat_stats.repaired_fat1 || s_fat_stats.repaired_fat2)) {
         portENTER_CRITICAL(&s_lock);
-        s_overlay_pending = true;   // a rewritten FAT is a repair the user should hear about
+        arm_overlay_once_locked();  // a rewritten FAT is a repair the user should hear about
         portEXIT_CRITICAL(&s_lock);
     }
 

@@ -100,8 +100,9 @@ esp_err_t sd_repair_heal_for_write(const char *file_path);
 
 /**
  * For the render loop only: returns true exactly once after the first repair
- * of the boot (directory quarantine or boot-time FAT restore), so the
- * on-screen notice shows once per boot by construction.
+ * of the boot (directory quarantine or boot-time FAT restore). Later repairs
+ * of the same boot do not re-arm it, so the on-screen notice shows once per
+ * boot; only sd_repair_reset_total() (a format) lets it arm again.
  */
 bool sd_repair_take_pending_overlay(void);
 
@@ -111,7 +112,10 @@ uint32_t sd_repair_count_boot(void);
 /** Directory repairs persisted across boots (NVS); reset by a format. */
 uint32_t sd_repair_count_total(void);
 
-/** Zero the persisted repair counter (called after an on-device format). */
+/**
+ * Zero the persisted repair counter and let the on-screen notice arm again
+ * (called after an on-device format).
+ */
 void sd_repair_reset_total(void);
 
 #ifdef __cplusplus
