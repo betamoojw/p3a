@@ -282,3 +282,31 @@ counter firing twice on the release-configuration build (12:09 and 12:36),
 and the web UI banner was seen; nobody was watching the screen at those
 moments, so the rendering itself is not visually verified. It reuses the
 render path of the SD-failure notice, which is.
+
+### Defect found 2026-09-30: the notice repeated on every repair
+
+Fab saw the message box on the device, several times in one boot. The flag
+was set by every directory quarantine and again by the boot FAT restore, and
+nothing remembered that the notice had already been armed, so each repair
+raised it anew (`/status` at 184 s uptime: two quarantines plus a FAT restore
+of 37 + 28 sectors). The sibling SD-failure notice never had the problem
+because its flag sits inside the write-once failure latch.
+
+Fix: a write-once latch in `sd_repair.c` gates both arming sites. The first
+repair of the boot arms the notice; later repairs only move the counters. An
+on-device format clears the latch with the persisted total (both format
+paths reboot today, so this has no visible effect yet). `p3a_render` logs
+`SD repair notice raised` at INFO when it shows the box.
+
+Device, release configuration, serial capture of the first 5 minutes after
+flashing: quarantines at 105 s (`giphy/48/8`) and 128 s (`klipy/gif/41/33`),
+one `SD repair notice raised` line at 105 s, none for the second repair,
+which landed after the first notice's 20 s had run out and would have raised
+a second box before the fix. The boot FAT check restored nothing on that
+boot, so the path where the FAT restore arms the notice and a later
+quarantine stays silent was not exercised. Not yet confirmed by eye on the
+screen.
+
+Still open: the 20 s is an upper bound. A successful artwork swap clears the
+message slot, so a notice armed by the boot FAT restore may be dismissed by
+the first swap. To be judged on the device before changing anything.
