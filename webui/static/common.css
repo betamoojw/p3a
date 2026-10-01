@@ -4,13 +4,14 @@
  * -------------
  * All colour, type and radius decisions live in design tokens. The active theme
  * is chosen by a `data-theme` attribute on <html> (set very early by
- * /static/theme.js from localStorage, so there is no flash). Four brand themes
- * ship today — see docs/brand-identity/ for the full rationale:
+ * /static/theme.js from localStorage, so there is no flash). Five brand themes
+ * ship today — see docs/brand-identity/IMPLEMENTATION.md:
  *
  *   spectrum  (default) — the hue-wheel made systematic; dark "display-off" canvas
  *   gallery              — warm museum neutrals; the art is the only colour
  *   console              — dark emissive instrument/HUD chrome, mono readouts
  *   dither               — risograph inks on warm paper, bold + flat, dot screen
+ *   blossom              — soft blush canvas, rose + lilac, italic serif wordmark
  *
  * Token families:
  *   --c-bg / --c-on-bg*        page canvas + things sitting directly on it

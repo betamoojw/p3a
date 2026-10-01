@@ -1,5 +1,16 @@
 # Architecture
 
+## Platform
+
+- **SoC**: dual-core ESP32-P4 (RISC-V), with an ESP32-C6 co-processor for
+  Wi-Fi 6 / BLE reached through esp_hosted over SDIO.
+- **Framework**: ESP-IDF v5.5.4.
+- **Code**: the `main/` application component plus 32 components under
+  `components/` (see [components.md](components.md)).
+- **Flash budget**: two 8 MB OTA app slots, a 4 MB LittleFS web UI image, a
+  2 MB slot for the ESP32-C6 image, and a 256 KB core dump partition
+  (`partitions.csv`). The feature list lives in the root `README.md`.
+
 ## System Overview
 
 ```

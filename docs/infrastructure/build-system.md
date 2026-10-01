@@ -1,6 +1,6 @@
 # Build System
 
-## Framework: ESP-IDF 5.5.x
+## Framework: ESP-IDF 5.5.4
 
 The project uses **ESP-IDF** (Espressif IoT Development Framework) with CMake as the build system.
 

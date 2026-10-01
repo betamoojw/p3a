@@ -39,7 +39,7 @@ production.
 ## Toolchain and environment
 
 - ESP-IDF v5.5.4, target `esp32p4`, developed on Windows with PowerShell.
-  Setting up a new machine: `docs/reference/esp-idf-5.5.4-workstation-2-crib-sheet.md`.
+  Setting up a new machine: `docs/reference/esp-idf-5.5.4-setup.md`.
 - The ESP32-C6 image `network_adapter.bin` is a prebuilt binary in
   `components/slave_ota/firmware/`; `slave_ota` flashes it into the P4's
   `slave_fw` partition. It is not built by this project.
@@ -208,23 +208,25 @@ Three independent version numbers live at the top of the root `CMakeLists.txt`:
 
 Most non-trivial decisions in this project are written down. Read the relevant
 page before exploring the code for a subsystem, and check the parked
-investigations before re-opening a problem.
+issues and deferred ideas before re-opening a problem.
 
 | Where | What |
 |-------|------|
-| `docs/infrastructure/README.md` | Developer index: architecture, directory structure, build system, components, hardware, network and API, display pipeline, configuration. `docs/INFRASTRUCTURE.md` is a stub that points here. |
+| `docs/infrastructure/README.md` | Developer index: architecture, directory structure, build system, components, hardware, network and API, display pipeline, configuration. |
 | `docs/QUICK-START.md`, `docs/HOW-TO-USE.md` | User-facing behavior, from first boot to the REST API. The source of truth for what the product does from the user's side. |
 | `docs/flash-p3a.md`, `docs/web-flasher/` | Flashing methods, and the browser flasher served from GitHub Pages (`firmware/{tag}/` is filled by CI on each release). |
 | `docs/BOARD-CAPABILITIES.md` | Hardware reference for the board. |
-| `docs/reference/` | Makapix MQTT protocol and player API, ESP-IDF workstation crib sheet. |
+| `docs/reference/` | Makapix MQTT protocol and player API, ESP-IDF 5.5.4 setup. |
 | `docs/art-institutions/finalized-design.md` | Source of truth for the museum channels; per-museum quirks and status live there. |
-| `docs/jitter/`, `docs/intro-animations/`, `docs/klipy/`, `docs/makapix-cert-renewal/`, `docs/transport-recovery/`, `docs/title-view/` | Per-work-stream folders. Where a `README.md` exists it is the "start here" for resuming that stream; otherwise start from `PLAN.md`. |
-| `docs/*-tabled.md`, `docs/deferred/`, and the standalone evaluations in `docs/` | Investigations parked with their findings (concurrent TLS EAGAIN, CPU1 saturation, SDIO RX OOM, exFAT, PSRAM migration, content-source survey). |
-| `docs/brand-identity/` | Brand work, not firmware. |
+| `docs/known-issues.md` | Open problems with their root cause and the decision still pending (SDIO RX internal-RAM exhaustion, slow software JPEG decodes, open code-audit findings). Check it before re-opening a problem. |
+| `docs/deferred/` | Parked ideas, one page each, with what would unblock them (exFAT, ESP-IDF 6, Gallica, Library of Congress, aspect-ratio filter, long Wellcome labels). |
+| `docs/makapix-cert-renewal/` | In-flight work stream (device certificate renewal, 1.2.4): `PLAN.md` is the design, `PROGRESS.md` the status. |
+| `docs/jitter/` | Finished playback-jitter work stream: `REPORT.md` is the summary; `README.md` holds the diagnostic builds, the lab tooling, and the follow-up for esp-idf #19034. |
+| `docs/intro-animations/`, `docs/klipy/`, `docs/title-view/`, `docs/brand-identity/` | Reference for shipped features: how to add a boot animation, Klipy API notes, per-source artwork-info endpoints, the web UI theme system. |
+| `README.md` | Public front page. Its feature list, component table, and storage layout must match reality. |
 
 Outreach, talks, and retired research corpora live in the private
 `fabkury/p3a-private` repository, not here.
-| `README.md` | Public front page. Its feature list, component table, and storage layout must match reality. |
 
 ### Keeping documentation honest
 

@@ -475,4 +475,4 @@ Files can be uploaded via `POST /upload` (the same multipart endpoint the web UI
 
 ### Need more help?
 
-Check [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for technical details, or open an issue on the GitHub repository.
+Check the [infrastructure docs](infrastructure/README.md) for technical details, or open an issue on the GitHub repository.

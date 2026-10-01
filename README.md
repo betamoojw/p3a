@@ -187,7 +187,7 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 | **Storage** | microSD card slot (4-bit SDMMC) |
 | **Connectivity** | Wi-Fi 6, Bluetooth LE |
 | **Power** | USB-C, any 5V 1A (or more) source (no battery) |
-| **Framework** | ESP-IDF v5.5 |
+| **Framework** | ESP-IDF v5.5.4 |
 
 <p align="center">
   <img src="images/hardware/ESP32-P4-WIFI6-Touch-LCD-4B-details-size.jpg" alt="Board dimensions and layout" width="100%">
@@ -249,7 +249,7 @@ SD card layout: `/sdcard/p3a/animations/` (local files), `/sdcard/p3a/vault/` (M
 | [QUICK-START.md](docs/QUICK-START.md) | Quick Start Guide — the fastest path from box to art on the screen |
 | [HOW-TO-USE.md](docs/HOW-TO-USE.md) | Full user guide — setup, touch controls, Wi-Fi, web UI, REST API, Giphy, Klipy, PICO-8 |
 | [flash-p3a.md](docs/flash-p3a.md) | Flashing instructions (web flasher and alternatives) |
-| [INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md) | Technical architecture for developers and contributors |
+| [Infrastructure docs](docs/infrastructure/README.md) | Technical architecture for developers and contributors |
 
 ## Community
 
@@ -261,7 +261,7 @@ SD card layout: `/sdcard/p3a/animations/` (local files), `/sdcard/p3a/vault/` (M
 
 Contributions are welcome. By contributing, you agree that your work will be licensed under the Apache License 2.0.
 
-Start with [INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md) for technical details about the codebase.
+Start with the [infrastructure docs](docs/infrastructure/README.md) for technical details about the codebase.
 
 ## License
 

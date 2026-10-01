@@ -287,7 +287,7 @@ All 32 components live under `components/`: 29 p3a components, described in orde
 - **Public API**: `http_fetch.h`
 - **Key functions**: `http_fetch_to_buffer()` (body into a caller-owned buffer, for JSON/text APIs), `http_fetch_to_file()` (body into a file on the SD card, for binary artwork)
 - **Callbacks**: `on_rate_limited` (caller records the 429 cooldown, e.g. the per-museum table), `should_abort` (caller cancels mid-transfer), `progress` (caller renders download progress). Domain behavior stays in the caller, so http_fetch has no dependency on the fetchers
-- **TLS gate**: at most `CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS` transfers hold a live TLS session at once, so overlapping HTTPS streams cannot starve each other on the single Wi-Fi link (see `docs/concurrent-tls-eagain-tabled.md`, Option 4)
+- **TLS gate**: at most `CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS` transfers hold a live TLS session at once, so overlapping HTTPS streams cannot starve each other on the single Wi-Fi link
 
 ## 27. mem_stats — Memory Usage Snapshots
 
@@ -295,7 +295,7 @@ All 32 components live under `components/`: 29 p3a components, described in orde
 - **Key files**: `mem_stats.c`
 - **Public API**: `mem_stats.h`
 - **Key functions**: `mem_stats_collect()`, `mem_stats_log()`, `mem_stats_to_json()`
-- **Focus**: internal RAM, the scarce pool on the ESP32-P4 (PSRAM is plentiful). The `INTERNAL|DMA|8BIT` mask is reported separately because that is the exact allocation esp_hosted's SDIO RX path makes, and its exhaustion is what panics the chip (see `docs/sdio-rx-oom-crash.md`)
+- **Focus**: internal RAM, the scarce pool on the ESP32-P4 (PSRAM is plentiful). The `INTERNAL|DMA|8BIT` mask is reported separately because that is the exact allocation esp_hosted's SDIO RX path makes, and its exhaustion is what panics the chip (see `docs/known-issues.md`, "SDIO RX: internal-RAM exhaustion")
 
 ## 28. frame_trace — Presentation-Lateness Frame Trace
 
@@ -313,7 +313,7 @@ All 32 components live under `components/`: 29 p3a components, described in orde
 - **Public API**: `sd_idle_wait.h`: `sd_idle_wait_wrap_enabled()`, `sd_idle_wait_idf_patched()` (build identity, reported by `GET /api/debug/frames/stats` on frame-trace builds). The original stays reachable as `__real_sdmmc_wait_for_idle` for the SPI-host assert path
 - **Kconfig**: `P3A_SD_IDLE_WAIT_WRAP` (default y, keep on in release). Off only to measure stock IDF or an IDF-side fix (`sdkconfig.nowrap.defaults`)
 - **Upstream**: esp-idf issue #19034; Espressif's own back-off patch evaluated in `docs/jitter/espressif-patch/`
-- **Docs**: `docs/jitter/README.md`; measurement in `docs/jitter/runs/RUN-20260830-03-04.md`
+- **Docs**: `docs/jitter/README.md`
 
 ## 30. Supporting Libraries
 

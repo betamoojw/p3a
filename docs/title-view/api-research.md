@@ -144,8 +144,7 @@ GET https://api.vam.ac.uk/v2/objects/search?q={iiif_key}&page_size=1
 
 Fields: `records[0]._primaryTitle`, `records[0]._primaryMaker.name`, `records[0]._primaryDate`.
 
-**Verify-during-impl:** if the free-text query does not return the right hit
-deterministically, switch to a structured filter
+**Fallback** (if the free-text query ever stops returning the right hit): switch to a structured filter
 (`?q_object_data=_primaryImageId:{id}`) or fall back to fetching the object
 directly by its `systemNumber` (requires storing the systemNumber too — out of
 scope today).
@@ -167,7 +166,7 @@ GET https://api.wellcomecollection.org/catalogue/v2/works
 Fields: `results[0].title` (paragraph-trimmed by `getTitle`),
 `results[0].contributors[0].agent.label`, `results[0].production[0].dates[0].label`.
 
-**Verify-during-impl:** if a free-text query on the bnumber returns 0 hits, try
+**Fallback** (if a free-text query on the bnumber returns 0 hits): try
 the alternate parameter `identifiers.value={vid}` — Wellcome catalogue items often
 carry the bnumber as a parallel identifier.
 
@@ -185,7 +184,7 @@ Fields: `items[0].titles[0].title`, `items[0].production[].creator*` (via
 `getArtist` which walks `creator`, `creator_forename`, `creator_surname`),
 `items[0].production[0].creation_date_text`.
 
-**Verify-during-impl:** if free-text doesn't match, try a structured filter:
+**Fallback** (if free-text stops matching): try a structured filter:
 `?filters=[image_iiif_id:CONTAINS:{filename}]`.
 
 ### HAM (Harvard Art Museums)
@@ -267,11 +266,10 @@ feature uses. Response schema is unchanged. Confirmed live: response carries
 - **Missing API key** (HAM) — propagates the existing `makeNoKeyError()` from
   `webui/museum/ham.js:67`; surfaces as `—` in the panel.
 
-## Open items to verify at implementation
+## Lookup choices (resolved)
 
-1. V&A: does `q={imageId}` return the correct record? If not, switch to
-   `q_object_data=_primaryImageId:{id}` or a two-step lookup.
-2. Wellcome: does `query={vid}` return the correct work? If not, try
-   `identifiers.value={vid}`.
-3. SMK: does `keys={filename}` find the record? If not, switch to
-   `filters=[image_iiif_id:CONTAINS:{filename}]`.
+The feature shipped with the free-text lookups in the table above for V&A
+(`q={iiif_key}`), Wellcome (`query={vid}`), and SMK (`keys={filename}`); see the
+info lookups in `webui/museum/vam.js`, `wellcome.js`, and `smk.js`. The
+per-source sections above list the structured fallback for each if a lookup
+ever starts returning the wrong record.

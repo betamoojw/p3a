@@ -1,8 +1,8 @@
 # Intro-Animations — Architecture
 
-How 12 animations share one codebase across firmware and a Windows host
-harness. Phase tracking is in [plan.md](plan.md); this file is the technical
-design.
+How the 22 intro animations share one codebase across firmware and a Windows
+host harness. Status and the how-to-add guide are in [README.md](README.md);
+this file is the technical design.
 
 ## Current code (baseline, verified 2026-06-11)
 
@@ -89,7 +89,7 @@ Rules for `render()`:
   `ctx->seed` (+ stable per-element keys), recomputed per frame.
 - Must fill the entire buffer every frame (the device triple-buffers; the
   "previous frame" isn't well-defined).
-- Must satisfy t=0 / t=1 contract (see plan.md) for every rotation/bg/seed.
+- Must satisfy t=0 / t=1 contract (see [README.md](README.md)) for every rotation/bg/seed.
 - Shared helpers (bg fill, logo-pixel iteration, easing) go in the shared
   module so the existing pixel-blit semantics stay the single source of
   truth.

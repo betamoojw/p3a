@@ -1,6 +1,6 @@
 // p3a Web UI — brand theme switcher.
 //
-// Four brand themes ship today (see docs/brand-identity/). The active one is
+// Five brand themes ship today (see docs/brand-identity/IMPLEMENTATION.md). The active one is
 // stored under a `data-theme` attribute on <html>; common.css keys every design
 // token off that attribute. Selection is persisted in localStorage. (A future
 // version may promote this to an NVS-backed device setting; until then it is

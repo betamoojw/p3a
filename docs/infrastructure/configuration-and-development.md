@@ -102,8 +102,8 @@ All p3a data is stored under a configurable root folder (`/sdcard/p3a` by defaul
 
 ### Prerequisites
 
-1. **ESP-IDF**: v5.5.x
-2. **Python**: 3.9+ (required by ESP-IDF v5.5.x)
+1. **ESP-IDF**: v5.5.4 (Windows setup: [esp-idf-5.5.4-setup.md](../reference/esp-idf-5.5.4-setup.md))
+2. **Python**: 3.9+ (required by ESP-IDF v5.5.4)
 3. **Hardware**: Waveshare ESP32-P4-WIFI6-Touch-LCD-4B + microSD card
 
 ### Setup

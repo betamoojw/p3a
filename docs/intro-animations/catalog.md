@@ -1,9 +1,9 @@
 # Intro-Animations — Catalog
 
 Live status of every animation that exists, was implemented, or is a
-candidate for implementation. Status values (defined in
-[README.md](README.md)): `idea` → `approved` → `host-dev` → `host-OK` →
-`device-OK` → `production-ready`.
+candidate for implementation. Status values: `idea` → `approved` → `host-dev` → `host-OK` →
+`device-OK` (verified on the ESP32-P4) → `production-ready` (passed the
+Phase 5 QA in [README.md](README.md)).
 
 Final selection: the original plan was to cull to the best 12; **on
 2026-08-10 Fab dropped the cull — all 22 implemented animations ship** and
