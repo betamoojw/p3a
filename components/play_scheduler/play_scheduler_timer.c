@@ -48,11 +48,12 @@ static void dwell_timer_callback(TimerHandle_t timer)
 
     // Skip the tick while a swap is still in flight. A pathological JPEG on
     // the libjpeg-turbo software path can hold the loader/prefetch pipeline
-    // for 45-105 s (see docs/cpu1-saturation-wdt-tabled.md); each tick fired
-    // during that window would run a full SWRR round + pick only to be
-    // rejected by animation_player_request_swap() with ESP_ERR_INVALID_STATE
-    // ("swap already in progress"). The in-flight swap resets this timer when
-    // it completes, so skipped ticks never shorten the next artwork's dwell.
+    // for 45-105 s (see docs/known-issues.md, "Slow software JPEG decodes");
+    // each tick fired during that window would run a full SWRR round + pick
+    // only to be rejected by animation_player_request_swap() with
+    // ESP_ERR_INVALID_STATE ("swap already in progress"). The in-flight swap
+    // resets this timer when it completes, so skipped ticks never shorten the
+    // next artwork's dwell.
     if (animation_player_is_loader_busy && animation_player_is_loader_busy()) {
         ESP_LOGI(TAG, "Auto-swap tick skipped: swap still in progress");
         return;

@@ -1,12 +1,13 @@
 # Gallica (BnF) integration
 
 **Status:** Deferred (M6 — 2026-05-12).
-**Scope:** Adding BnF Gallica as a sixth museum channel.
+**Scope:** Adding BnF Gallica as a museum channel.
 
 ## What was deferred
 
-Implementing a Gallica adapter alongside the existing five museums
-(AIC, Rijksmuseum, V&A, Wellcome Collection, SMK).
+Implementing a Gallica adapter alongside the existing nine museums
+(AIC, Rijksmuseum, V&A, Wellcome Collection, SMK, Harvard Art Museums,
+Smithsonian, Cleveland Museum of Art, Minneapolis Institute of Art).
 
 ## Why
 
@@ -23,7 +24,7 @@ does not ship one. Adding Gallica would require either:
    fields we need (`numberOfRecords`, `record/recordData`, `creator`,
    `title`, `identifier`, `type`, `date`) from a tag stream.
 
-Either path is multiple days of work that the existing five museums
+Either path is multiple days of work that the existing museums
 already cover in image-content terms.
 
 There's also a User-Agent quirk: Gallica returns HTTP 403 to default

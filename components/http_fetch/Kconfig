@@ -15,7 +15,8 @@ menu "HTTP Fetch"
             returns EAGAIN (logged as "esp_tls_conn_read error, errno=No more
             processes"), esp_http_client reports it as end-of-stream, and the
             transfer is retried as a truncated read. Big GIFs could lose every
-            retry. See docs/concurrent-tls-eagain-tabled.md (Option 4).
+            retry. Raising the lwIP receive mailboxes alone only moved that
+            ceiling; a hard cap removes it.
 
             2 preserves the Giphy API-page-fetch + binary-download overlap that
             cold-start latency depends on, while blocking a third session from

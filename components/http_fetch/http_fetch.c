@@ -18,8 +18,7 @@
  *
  * do_fetch() also owns a process-wide TLS concurrency gate (a counting
  * semaphore) so overlapping HTTPS transfers can't starve each other on the
- * single Wi-Fi link — see the gate section below and
- * docs/concurrent-tls-eagain-tabled.md (Option 4).
+ * single Wi-Fi link — see the gate section below.
  */
 
 #include "http_fetch.h"
@@ -66,7 +65,7 @@ static const char *TAG = "http_fetch";
 static const uint32_t s_default_backoff_ms[HTTP_FETCH_DEFAULT_ATTEMPTS] = {0, 1000, 3000};
 
 // ---------------------------------------------------------------------------
-// TLS concurrency gate (Option 4, docs/concurrent-tls-eagain-tabled.md)
+// TLS concurrency gate
 //
 // Every transfer issued through this helper passes through a process-wide
 // counting semaphore, so at most CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS fetches
@@ -496,7 +495,10 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
             // Chunked responses carry no Content-Length, so the byte-count
             // truncation check below can't see a premature end-of-stream (the
             // EAGAIN-under-load path surfaces as read==0, indistinguishable
-            // from EOF — see docs/concurrent-tls-eagain-tabled.md). The parser
+            // from EOF: esp-tls maps an lwIP EAGAIN on a starved socket to a
+            // zero-byte read, and esp_http_client takes that as end-of-stream,
+            // so a partial chunked body would otherwise be accepted and cached
+            // as a corrupt artwork). The parser
             // does know whether the terminating zero-length chunk arrived;
             // capture that before close/cleanup destroy the parser state.
             // Gated on is_chunked: for close-delimited responses (no
@@ -624,9 +626,9 @@ esp_err_t http_fetch_to_file(const http_fetch_request_t *req,
     // Cache-line aligned so the SD host can DMA straight from this PSRAM buffer.
     // An unaligned PSRAM buffer makes sdmmc_write_sectors bounce 512 bytes at a
     // time (one SD command per sector: 64 commands per 32 KB chunk), which in
-    // RUN-05 of the jitter work stream cost 72 ms median / 345 ms p99 per chunk
-    // and stalled playback (docs/jitter/PLAN.md, H3b). Size is rounded up to
-    // the same boundary; fwrite still uses chunk_size.
+    // the jitter work stream cost 72 ms median / 345 ms p99 per chunk and
+    // stalled playback (the H3b bounce path, docs/jitter/REPORT.md). Size is
+    // rounded up to the same boundary; fwrite still uses chunk_size.
     const size_t chunk_alloc = (chunk_size + HTTP_FETCH_SD_DMA_ALIGN - 1) & ~(size_t)(HTTP_FETCH_SD_DMA_ALIGN - 1);
     uint8_t *chunk = heap_caps_aligned_alloc(HTTP_FETCH_SD_DMA_ALIGN, chunk_alloc, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!chunk) chunk = heap_caps_aligned_alloc(HTTP_FETCH_SD_DMA_ALIGN, chunk_alloc, MALLOC_CAP_8BIT);

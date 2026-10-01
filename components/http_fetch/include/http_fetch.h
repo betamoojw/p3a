@@ -25,7 +25,9 @@
  * process-wide TLS concurrency gate lives: at most
  * CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS transfers hold a live TLS session at
  * once, so overlapping HTTPS streams can't starve each other on the single
- * Wi-Fi link (see docs/concurrent-tls-eagain-tabled.md, Option 4).
+ * Wi-Fi link. Under contention a socket read stalls, lwIP returns EAGAIN,
+ * esp_http_client reports end-of-stream, and large downloads could lose every
+ * retry as a truncated read; capping concurrency removes that structurally.
  *
  * Two sinks, one core:
  *   - http_fetch_to_buffer() — body into a caller-owned buffer (JSON/text APIs)

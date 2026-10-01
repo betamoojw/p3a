@@ -72,7 +72,8 @@ static esp_timer_handle_t s_reg_success_timer = NULL;
 // Disabled by default (the 2-minute console report is noisy in normal use). The
 // on-demand GET /api/memory endpoint is unaffected by this toggle. Flip to 1 to
 // re-enable the periodic console report when debugging the internal-RAM /
-// SDIO-RX pressure issues (see docs/sdio-rx-oom-crash.md).
+// SDIO-RX pressure issues (see docs/known-issues.md, "SDIO RX: internal-RAM
+// exhaustion").
 #define P3A_MEMORY_REPORT_ENABLED 0
 #define MEMORY_REPORT_INTERVAL_SECONDS 120
 
@@ -104,8 +105,9 @@ esp_err_t animation_player_set_dwell_time(uint32_t dwell_time)
 // with CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=8192 those per-node mallocs would
 // otherwise land in the DMA-capable internal pool the esp_hosted SDIO RX path
 // needs, fragmenting/exhausting it during refresh paging. See
-// docs/sdio-rx-oom-crash.md (Option E). Same allocator-redirection pattern as
-// main/ffsystem_aligned.c (FATFS) and channel_manager/psram_alloc.h.
+// docs/known-issues.md, "SDIO RX: internal-RAM exhaustion" (Option E). Same
+// allocator-redirection pattern as main/ffsystem_aligned.c (FATFS) and
+// channel_manager/psram_alloc.h.
 static void *cjson_psram_malloc(size_t sz)
 {
     void *p = heap_caps_malloc(sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -446,8 +448,9 @@ void app_main(void)
     // here: PSRAM heap is already up (CONFIG_SPIRAM_BOOT_INIT=y) and no cJSON
     // runs before app_main(). Keeps the large transient JSON parse trees out of
     // the DMA-capable internal pool that esp_hosted SDIO RX needs — see
-    // docs/sdio-rx-oom-crash.md (Option E). free() is heap-region-aware, so it
-    // releases PSRAM and internal blocks correctly.
+    // docs/known-issues.md, "SDIO RX: internal-RAM exhaustion" (Option E).
+    // free() is heap-region-aware, so it releases PSRAM and internal blocks
+    // correctly.
     cJSON_InitHooks(&(cJSON_Hooks){ .malloc_fn = cjson_psram_malloc, .free_fn = free });
 
     // Arm the heap allocation-failed hook as early as possible — well before
