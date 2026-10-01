@@ -251,11 +251,10 @@ The Klipy tab at `http://p3a.local/settings#klipy` lets you customize:
 
 ## Museum Channels
 
-p3a can play artwork from major museums that publish their collections online — most through the [IIIF Image API](https://iiif.io/api/image/3.0/), the Cleveland Museum of Art and the Minneapolis Institute of Art through their own open-access image CDNs. Channels are organized by the museum's own facets (collections, departments, sets, ...) and refreshed on a schedule. Nine museums ship today:
+p3a can play artwork from major museums that publish their collections online — most through the [IIIF Image API](https://iiif.io/api/image/3.0/), the Cleveland Museum of Art and the Minneapolis Institute of Art through their own open-access image CDNs. Channels are organized by the museum's own facets (collections, departments, sets, ...) and refreshed on a schedule. Eight museums are available today:
 
 | Museum | Facets you can pick |
 |---|---|
-| **Art Institute of Chicago** | Departments, Classifications, Subjects, Themes, Galleries, Artwork types |
 | **Rijksmuseum** | Curated Sets (Rijks's own collection groupings) |
 | **Victoria and Albert Museum** | Collections, Categories, Venues |
 | **Wellcome Collection** | Work types, Genres, Subjects, Contributors |
@@ -265,7 +264,9 @@ p3a can play artwork from major museums that publish their collections online �
 | **Cleveland Museum of Art** | Departments, Types — CC0 works only |
 | **Minneapolis Institute of Art** | Classifications, Departments, Countries, Styles — public-domain works only |
 
-Seven of the nine museums need no account or API key. Two do:
+The Art Institute of Chicago is temporarily unavailable: since 2026-08 its image server blocks direct access from devices, so AIC channels can't fetch new artwork. AIC art already on the card keeps playing.
+
+Six of the eight museums need no account or API key. Two do:
 
 - **Harvard Art Museums** — request a free key at [harvardartmuseums.org/collections/api](https://harvardartmuseums.org/collections/api) (delivered by email within a day) and paste it into **Settings → Museums → Harvard Art Museums (API key)**.
 - **Smithsonian** — register at [api.data.gov/signup/](https://api.data.gov/signup/) (instant, email-based) and paste the key into **Settings → Museums → Smithsonian (API key)**. One api.data.gov key covers Smithsonian and every other api.data.gov service (NASA, NOAA, etc.). Don't use `DEMO_KEY` — its ~30 req/hour-per-IP cap will throttle the first refresh mid-flight.
@@ -281,7 +282,7 @@ Until a key is saved, the corresponding museum entry in the browse modal will pr
 5. The modal previews one artwork at a time at 400 px, with **Previous** / **Next** navigation and a title/artist/date caption. The **Add channel** button commits the channel — not the visible artwork. (Rijks previews resolve lazily, so the first thumbnail takes a moment)
 6. Save the playset normally
 
-The channel saves under a name like `AIC · Arts of Greece, Rome, and Byzantium` or `V&A · Photographs`, truncated with an ellipsis past 64 characters. The wire encoding is `{museum_id}:{axis}` for the channel name and the facet term id for the identifier — see [finalized-design.md §4.1](art-institutions/finalized-design.md).
+The channel saves under a name like `V&A · Photographs` or `CMA · Japanese Art`, truncated with an ellipsis past 64 characters. The wire encoding is `{museum_id}:{axis}` for the channel name and the facet term id for the identifier — see [finalized-design.md §4.1](art-institutions/finalized-design.md).
 
 ### Refresh and download behavior
 
@@ -289,7 +290,7 @@ The channel saves under a name like `AIC · Arts of Greece, Rome, and Byzantium`
 - **First refresh** fetches the listing from the museum's API. Image downloads happen lazily as the device rotates through the playset — the first artworks appear within seconds, the rest fill in over the next minutes.
 - **Cached files** live under `museum/{museum_id}/` in your SD card root, hash-sharded and shared across all channels of the same museum — two channels referencing the same artwork only pay for it once. Cleanup is automatic (see [SD Card Sizing and Automatic Cleanup](#sd-card-sizing-and-automatic-cleanup)).
 - **Rijks artworks** require a "Linked Art walk" (three follow-up HTTP requests per artwork) to discover the actual IIIF identifier. The device does this lazily in the background, so a fresh Rijks channel takes ~50 minutes to fully populate — but the first few artworks appear within seconds.
-- **Rate limits** are honored per-museum. AIC publishes a 60-req/minute cap; the others don't publish one but a 429 still engages a cooldown. The cooldown is shared between the device and the browser-side browse modal: if you trigger throttling from the modal, the device also waits.
+- **Rate limits** are honored per-museum. Harvard and the Smithsonian cap requests per API key (see **Settings → Museums**); the others don't publish a limit, but a 429 still engages a cooldown. The cooldown is shared between the device and the browser-side browse modal: if you trigger throttling from the modal, the device also waits.
 
 > A small number of Wellcome terms with very long labels are hidden from the browse modal — see [`docs/deferred/wellcome-long-labels.md`](deferred/wellcome-long-labels.md) for the rationale.
 
