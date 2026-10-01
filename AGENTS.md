@@ -220,7 +220,10 @@ investigations before re-opening a problem.
 | `docs/art-institutions/finalized-design.md` | Source of truth for the museum channels; per-museum quirks and status live there. |
 | `docs/jitter/`, `docs/intro-animations/`, `docs/klipy/`, `docs/makapix-cert-renewal/`, `docs/transport-recovery/`, `docs/title-view/` | Per-work-stream folders. Where a `README.md` exists it is the "start here" for resuming that stream; otherwise start from `PLAN.md`. |
 | `docs/*-tabled.md`, `docs/deferred/`, and the standalone evaluations in `docs/` | Investigations parked with their findings (concurrent TLS EAGAIN, CPU1 saturation, SDIO RX OOM, exFAT, PSRAM migration, content-source survey). |
-| `docs/outreach/`, `docs/brand-identity/` | Public communication drafts and brand work, not firmware. |
+| `docs/brand-identity/` | Brand work, not firmware. |
+
+Outreach, talks, and retired research corpora live in the private
+`fabkury/p3a-private` repository, not here.
 | `README.md` | Public front page. Its feature list, component table, and storage layout must match reality. |
 
 ### Keeping documentation honest
