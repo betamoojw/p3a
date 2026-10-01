@@ -481,7 +481,10 @@ const CONFIG = {
     BAUD_RATE: 460800,
     FLASH_MODE: 'dio',
     FLASH_FREQ: '80m',
-    FLASH_SIZE: '32MB'
+    FLASH_SIZE: '32MB',
+    // Releases older than this major version are not offered. Their files
+    // were pruned from firmware/ to keep the Pages tree small.
+    MIN_MAJOR_VERSION: 1
 };
 
 // ============================================
@@ -583,6 +586,11 @@ async function fetchReleases() {
     }));
 
     return data;
+}
+
+function isOffered(release) {
+    const major = parseInt(release.tag_name.replace(/^v/, ''), 10);
+    return Number.isFinite(major) && major >= CONFIG.MIN_MAJOR_VERSION;
 }
 
 function getAssetUrl(release, filename) {
@@ -1033,7 +1041,7 @@ async function init() {
     // Load releases
     try {
         log('Fetching releases from GitHub...');
-        state.releases = await fetchReleases();
+        state.releases = (await fetchReleases()).filter(isOffered);
         populateReleases(state.releases);
         log(`Found ${state.releases.length} releases`);
     } catch (error) {
