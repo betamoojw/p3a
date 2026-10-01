@@ -5,8 +5,8 @@
  * @file museums/ham.c
  * @brief Harvard Art Museums (HAM) adapter — refresh + IIIF URL build.
  *
- * Implements the per-museum spec in
- * docs/art-institutions/ham-investigation/REPORT.md
+ * Implements docs/art-institutions/finalized-design.md §9.4, first
+ * drafted in docs/art-institutions/ham-investigation/REPORT.md
  * §"Per-museum specification draft for finalized-design.md".
  *
  * HAM's API has the uniform shape that lets the browser-side adapter do

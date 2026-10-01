@@ -3,7 +3,7 @@
 //
 // Museum browse modal — the four-step flow specified in
 // docs/art-institutions/finalized-design.md §7.1:
-//   museum -> axis -> term-with-count -> 8-thumbnail strip -> Add.
+//   museum -> axis -> term-with-count -> single-artwork preview -> Add.
 //
 // The modal owns its own DOM and CSS injection. Callers invoke
 // openMuseumBrowse({ onAdd, onCancel }); the modal mounts itself,
@@ -12,7 +12,8 @@
 import { listAdapters, getAdapter } from './index.js';
 
 // PAGE_SIZE — items per listArtworks() round-trip during preview
-// navigation. See spec §4.1 for the trade-off; 20 is the chosen value.
+// navigation. Small enough to keep Next responsive, large enough to
+// avoid a round-trip on most presses; 20 is the chosen value.
 const PAGE_SIZE = 20;
 
 const STYLE_ID = 'museum-browse-style';
@@ -346,7 +347,7 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
 
     function computeCursorEnd(prev, gotItemsCount) {
         // After a fetch returns gotItemsCount items, decide if this is
-        // the end of the stream. See spec §4.3.
+        // the end of the stream.
         if (gotItemsCount === 0) return true;
         if (typeof prev.total === 'number' && prev.nextOffset >= prev.total) return true;
         // AIC public-tier cap: `from + size <= 1000`. Only enforce when we

@@ -1,8 +1,10 @@
 # Harvard Art Museums — API investigation report
 
 *Investigation performed 2026-05-18 against the live HAM REST API
-(`api.harvardartmuseums.org`) and IIIF image service. All probe scripts
-and raw JSON dumps live alongside this file.*
+(`api.harvardartmuseums.org`) and IIIF image service. The probe scripts
+(`probe_ham_*.py`), their parsed `output/*.md` summaries, and the raw JSON
+dumps were removed in the 2026-10 docs cleanup; recover them from git
+history if a re-run is needed.*
 
 ## Headline findings
 
@@ -381,7 +383,8 @@ M1 doesn't accidentally regress on them:
 ## What's next
 
 Stage 3 deliverables — when scheduled — would mirror the existing
-M1/M2 pattern (`docs/art-institutions/finalized-design.md` §14):
+M1/M2 pattern (the AIC and Rijks milestones, since removed from
+`docs/art-institutions/finalized-design.md`; see git history):
 
 1. **C side:** new `museums/ham.c` adapter with `refresh_channel` and
    `build_iiif_url`; new museum enum value

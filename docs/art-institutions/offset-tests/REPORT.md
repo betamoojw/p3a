@@ -6,11 +6,11 @@
   *channel offset* feature on art-institution channels. Establishes
   what each museum API actually supports before any design work begins.
 - **Method:** Empirical probes against live APIs, cross-referenced
-  against AIC's open-source server config. Helper scripts are
-  preserved in this directory (`probe_aic.py`,
-  `probe_aic_403_boundary.py`, `probe_aic_escape_hatches.py`,
-  `probe_aic_bool_partition.py`, `probe_vam.py`, `probe_rijks.py`)
-  along with their captured outputs (`*_results.txt`).
+  against AIC's open-source server config. The helper scripts
+  (`probe_aic.py`, `probe_aic_403_boundary.py`,
+  `probe_aic_escape_hatches.py`, `probe_aic_bool_partition.py`,
+  `probe_vam.py`, `probe_rijks.py`) and their captured outputs
+  (`*_results.txt`) are in git history; see §6 to reproduce.
 
 ## TL;DR
 
@@ -182,7 +182,7 @@ The firmware's default `ai_cache_size` is **1024**. Even with offset=0
 the firmware already breaches the 1000-cap whenever the channel's
 total population is large enough to fill the cache — which is exactly
 why the current code treats a 403 after at least one merged page as a
-partial-success terminal state (`finalized-design.md` §15.1).
+partial-success terminal state (`finalized-design.md` §9.1).
 
 So for AIC the picture is:
 
@@ -459,7 +459,7 @@ fetch as a shortcut to "everything past offset N".
 
 The firmware caps `ai_cache_size` at 1024 and walks pages 1..11
 (100 entries per page). Pages 1-10 succeed (offset 0-999); page 11
-fails. The existing field-observed fix in §15.1 treats a 403 after
+fails. The partial-success rule in `finalized-design.md` §9.1 treats a 403 after
 ≥1 merged page as partial success, so the channel ends up with ~1000
 entries and works fine. **This works because offset is implicitly 0.**
 A non-zero offset breaks the assumption: pages would 403 from the
@@ -492,14 +492,17 @@ the top). What remains is implementation-detail design:
 
 (A sixth question — whether to correct `finalized-design.md` §9.1's
 10 000-record cap claim before the feature pass — was resolved
-2026-05-12: §9.1 and §15.1 have been patched to reflect the real
-1 000-cap and to cross-reference this report.)
+2026-05-12: §9.1 was patched to reflect the real 1 000-cap and to
+cross-reference this report.)
 
 ## 6. Helper-script index
 
-All scripts live in this directory and are reusable; they take no
-arguments and emit human-readable trace to stdout. Captured outputs
-are next to them.
+The scripts and their captured outputs were removed from this
+directory in the 2026-10 docs cleanup. To reproduce, restore them from
+git history (`git log --diff-filter=D -- docs/art-institutions/offset-tests/`
+finds the removing commit; check out the files from its parent). They
+are standard-library Python 3 (no dependencies), take no arguments, and emit
+human-readable trace to stdout.
 
 | Script | What it does | Captured output |
 |---|---|---|

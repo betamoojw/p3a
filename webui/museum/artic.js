@@ -318,7 +318,7 @@ export class ArticAdapter {
         return { items: [], total: totalRecords };
     }
 
-    // 64×64 thumbnail (matches design §1's spec). IIIF v2 size syntax
+    // 64×64 thumbnail by default. IIIF v2 size syntax
     // !w,h means "fit within w×h, preserve aspect ratio".
     thumbnailUrl(imageId, size = 64) {
         return `${IIIF_HOST}/${encodeURIComponent(imageId)}/full/!${size},${size}/0/default.jpg`;

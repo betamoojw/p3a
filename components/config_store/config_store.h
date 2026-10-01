@@ -544,8 +544,8 @@ void config_store_invalidate_klipy_refresh_interval(void);
 /**
  * @brief Set the museum-channel refresh interval, in seconds
  *
- * @param seconds Refresh interval (28800-345600; 8h to 4d). Web UI offers
- *                28800 / 86400 / 172800 / 345600.
+ * @param seconds Refresh interval (86400-691200; 1 to 8 days, default 4 days).
+ *                Web UI offers 86400 / 172800 / 345600 / 691200.
  * @return ESP_OK on success, ESP_ERR_INVALID_ARG if out of range.
  */
 esp_err_t config_store_set_ai_refresh_sec(uint32_t seconds);
@@ -742,7 +742,7 @@ void     config_store_reset_touch_reboot_streak(void);
 void     config_store_reset_touch_reboot_counters(void);
 
 // ESP-Hosted Transport-Failure Reboot Counters (persisted in NVS)
-// See docs/transport-recovery/PLAN.md
+// See components/wifi_manager/transport_recovery.c
 uint16_t config_store_get_transport_reboot_total(void);
 void     config_store_increment_transport_reboot_total(void);
 uint16_t config_store_get_transport_reboot_streak(void);

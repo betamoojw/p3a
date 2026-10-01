@@ -1,33 +1,17 @@
 # Art Institution Channels — Finalized Design
 
-- **Status:** Final (source of truth for implementation)
-- **Last updated:** 2026-08-25
+- **Status:** Source of truth for the shipped museum channels
+- **Last updated:** 2026-10-01
 - **Owner:** pub@kury.dev
-- **History:** Design evolution and Q&A transcript are preserved in
-  `design.md` and `questions.md` alongside this file.
 
-> **Status update 2026-08-14 — AIC disabled.** `www.artic.edu/iiif/2` (AIC's
-> image host) now rejects every non-browser client with a Cloudflare managed
-> challenge (HTTP 403 + `Cross-Origin-Resource-Policy: same-origin`, so even
-> cross-origin `<img>` loads fail); the metadata API at `api.artic.edu` is
-> unaffected. Firmware marks AIC unavailable via `unavailable_reason` in
-> `art_institution.c`'s dispatch table (refresh/downloads skipped, cached art
-> keeps playing, badge + banner in the web UI, browse gated in
-> `webui/museum/artic.js`). `/playsets/active` exposes the per-museum state as
-> a `museum_unavailable` map. Revert by clearing that field and
-> `ARTIC_UNAVAILABLE` if AIC unblocks access — tracked upstream at
-> art-institute-of-chicago/data-aggregator#151 (open and unanswered since
-> ~2025-12; AIC's docs still claim CORS hotlinking works). Verified with no
-> UA, header, HTTP/1.1, alternate-host, or wsrv.nl-proxy bypass; the rare
-> transient 200 windows seen right after a browser on the same IP passed the
-> challenge are not usable. AIC design content below is
-> unchanged and still authoritative for the (currently dormant) adapter.
+> **AIC is unavailable.** Since 2026-08 AIC's image host blocks non-browser
+> clients via Cloudflare. Cached AIC art still plays; firmware gates the
+> museum through `unavailable_reason` in the dispatch table (details in §9.1).
 
-p3a v1 supports artwork from Makapix, Giphy, and the local SD card. This
-plan adds a fourth content source: **art institutions** that expose their
-collections via the IIIF Image API, starting with the Art Institute of
-Chicago (AIC) and the Rijksmuseum. The codebase term is `art_institution`;
-the user-facing label is **Museums**.
+Museum channels play artwork from art institutions that publish their
+collections through open APIs, mostly via the IIIF Image API. Nine museums
+ship (§9). The codebase term is `art_institution`; the user-facing label
+is **Museums**.
 
 The user picks a category (e.g. "Department: Modern and Contemporary Art")
 through a browse interface in the playset editor. The selection becomes a
@@ -59,50 +43,31 @@ storage, and feeding the picker.
 11. [Error handling](#11-error-handling)
 12. [Testing approach](#12-testing-approach)
 13. [Future work](#13-future-work)
-14. [Implementation milestones](#14-implementation-milestones)
-15. [Field-observed fixes](#15-field-observed-fixes)
-16. [Aspect-ratio filter](#16-aspect-ratio-filter--designed-not-implemented) — **designed, not implemented**
 
 ## 1. Scope
 
-> **Scope as shipped.** The lists below are the *original* v1 plan, kept
-> for historical reference. Nine museums ship today — `artic`, `rijks`,
-> `vam`, `wellcome`, `smk`, `ham`, `si`, `cma`, `mia` — so several
-> "Deferred" entries have since landed: museums beyond AIC and Rijks
-> (§9), and two non-IIIF sources (Cleveland and Minneapolis) that the
-> original scope did not anticipate at all. The dispatch table in
-> `art_institution.c` is the authoritative museum list; `artic` is
-> currently gated by `unavailable_reason` (see the status note above).
+Nine museums ship: `artic`, `rijks`, `vam`, `wellcome`, `smk`, `ham`,
+`si`, `cma`, `mia` (§9). The dispatch table in `art_institution.c` is the
+authoritative list; `artic` is currently gated by `unavailable_reason`
+(see the note above). Seven speak IIIF; Cleveland and Minneapolis serve
+fixed CDN renditions, so IIIF is a preference, not a requirement.
 
-### In v1 (original plan)
-
-- Browse and persist channels for AIC and Rijksmuseum.
-- Browse phase: per-museum JS adapters, browser-direct queries to museum
-  APIs.
-- Refresh phase: device-side C component that fetches artwork lists for
-  saved channels and stores them in a binary cache, mirroring the Giphy
-  refresh model.
-- Download artwork JPEGs via IIIF, longest side `≤ 720 px`.
-- Single-artwork preview in the browse UI, navigable via Previous / Next
-  buttons. Per-artwork preview URLs are resolved on demand: AIC and V&A
-  use the inline image id from the listing response; Rijks performs a
-  3-hop Linked-Art walk lazily, one artwork at a time.
-- Two new global NVS settings: `ai_refresh_sec`, `ai_cache_size`.
+- **Browse** runs in the browser: per-museum JS adapters query the museum
+  APIs directly and show a single-artwork preview with Previous / Next.
+- **Refresh** runs on the device: a C component fetches artwork lists for
+  saved channels into a binary cache, mirroring the Giphy refresh model.
+- **Download** fetches JPEGs at longest side `≤ 720 px` where the museum
+  allows sizing (§10).
+- Two global NVS settings, `ai_refresh_sec` and `ai_cache_size` (§8).
 - First-class per-museum rate-limit handling shared between browser and
   device (§11.1).
 
-### Deferred (as of the original plan)
-
-- Keyword search.
-- ~~Museums beyond AIC and Rijks.~~ Landed: seven more, see §9.
-- Per-channel cache size / refresh override.
-- Aggregator sources (Europeana, DPLA).
-- Manifest synthesis for image-only IIIF (Princeton-style).
-- Cross-channel mark-and-sweep vault GC (existing age-based eviction is
-  used instead — see §4.4).
-- `info.json`-aware rendition negotiation.
-- On-device storage of artist / title / date metadata.
-- Standalone `/museum-browse` web page.
+Out of scope today: keyword search, per-channel cache size / refresh
+overrides, aggregator sources (Europeana, DPLA), manifest synthesis for
+image-only IIIF, `info.json`-aware rendition negotiation, on-device
+artist / title / date metadata, a standalone `/museum-browse` page, and
+cross-channel mark-and-sweep vault GC (age-based eviction is used
+instead, §4.4). See §13.
 
 ## 2. Terminology
 
@@ -123,7 +88,7 @@ when empty.
 ```
 ┌─────────────┐  browse + thumbnail fetch (CORS) ┌──────────────┐
 │  Web UI     │ ───────────────────────────────► │ Museum APIs  │
-│  (browser)  │ ◄─────────────────────────────── │ (AIC, Rijks) │
+│  (browser)  │ ◄─────────────────────────────── │ (9 museums)  │
 └─────┬───────┘                                  └──────┬───────┘
       │                                                 │
       │ POST /playsets/{name}                           │
@@ -154,10 +119,6 @@ validates.
 
 **Device** owns: persistence, periodic refresh, image download, playback,
 LAi/Ci tracking, eviction.
-
-This split mirrors the existing Makapix flow — the browser already calls
-`makapix.club` directly for `verify-user` / `verify-hashtag`, and the
-firmware handles delivery.
 
 ## 4. Data model
 
@@ -237,9 +198,7 @@ Files land at:
 
 The shard prefix uses the shared `sd_path_build_sharded()` hash scheme
 (FNV-1a-64 of the sanitized iiif_key, 6-bit decimal dirs) for filesystem
-fan-out — same convention as Makapix's vault and Giphy's cache. (This doc
-originally specified `SHA256(iiif_key)` with 3 hex levels; the shard scheme
-changed globally for v1.0.)
+fan-out — same convention as Makapix's vault and Giphy's cache.
 
 The vault is **per-museum and shared across channels**. A given
 artwork — e.g. a Picasso painting that appears in `departments:Modern
@@ -275,20 +234,15 @@ eviction (halving the age threshold from
 `CONFIG_STORAGE_EVICTION_INITIAL_AGE_DAYS` down to
 `CONFIG_STORAGE_EVICTION_MIN_AGE_HOURS` until free space is restored).
 
-Integration:
-
-1. Add `sd_path_get_museum(char *out, size_t len)` to `sd_path`
-   (returns `/sdcard/p3a/museum`).
-2. Call `evict_from_base_dir()` on `/sdcard/p3a/museum` from
-   `evict_old_files()` after the vault and giphy passes.
+`sd_path_get_museum()` resolves the museum root (under the runtime SD
+root, `/sdcard/p3a/museum` by default), and `evict_old_files()` calls
+`evict_from_base_dir()` on it after the vault and giphy passes.
 
 The museum vault has an extra `{museum_id}` segment at the top compared
 to the vault and giphy layouts. The eviction walker is layout-unaware
 (it recurses into whatever directories exist and deletes by extension
 allowlist + age), so the extra segment needs no special handling — it
-is just one more directory level. (An earlier revision used a dedicated
-`evict_museum_root()` wrapper around a fixed-depth shard walker; the
-walker became layout-unaware for v1.0 and the wrapper was removed.)
+is just one more directory level.
 
 **Channel cache file cleanup** is already handled by
 `channel_eviction_check_and_run()`, which deletes stale channel `.cache`
@@ -308,45 +262,48 @@ directory; no changes needed.
 
 ## 5. Components
 
-### 5.1 New C component: `components/art_institution/`
+### 5.1 C component: `components/art_institution/`
 
 ```
 components/art_institution/
   CMakeLists.txt
-  Kconfig
-  art_institution.c              # public API + dispatch
-  art_institution_refresh.c      # per-channel refresh entry point
-  art_institution_download.c     # IIIF image fetch (HTTPS)
+  art_institution.c              # public API + dispatch table
+  art_institution_refresh.c      # per-channel refresh entry point, merge, orphan eviction
+  art_institution_download.c     # image fetch (HTTPS, via http_fetch)
+  art_institution_resolve.c      # lazy per-entry resolve (Rijks Linked-Art walk)
   art_institution_rate_limit.c   # per-museum cooldown table
   art_institution_internal.h
   museums/
-    artic.c                      # AIC adapter
-    rijksmuseum.c                # Rijks adapter
-    common.c                     # shared IIIF URL helpers
+    common.c                     # shared URL / JSON helpers
+    artic.c  rijksmuseum.c  vam.c  wellcome.c  smk.c
+    ham.c  smithsonian.c  cma.c  mia.c
   include/
-    art_institution.h            # public header
+    art_institution.h            # public header, art_institution_museum_t
     art_institution_types.h      # institution_channel_entry_t, museum_id_t enum
-  test/
-    fixtures/                    # captured JSON responses for manual testing
 ```
 
-Per-museum dispatch table (declared in `art_institution.c`):
+Per-museum dispatch table (`ART_INSTITUTION_MUSEUMS[]` in
+`art_institution.c`; the struct and per-callback contracts are in
+`art_institution.h`):
 
 ```c
 typedef struct {
-    const char *id;          // "artic", "rijks"
-    const char *display;     // "Art Institute of Chicago"
-    esp_err_t (*refresh_channel)(const char *axis,
-                                 const char *term_id,
-                                 channel_cache_t *cache);
-    esp_err_t (*build_iiif_url)(const institution_channel_entry_t *e,
-                                int longest_side,
-                                char *out, size_t len);
+    const char *id;            // stable wire id ("artic", "rijks", ...)
+    const char *display;       // "Art Institute of Chicago"
+    museum_id_t museum_enum;   // indexes the rate-limit table
+    esp_err_t (*refresh_channel)(const char *channel_id, const char *axis,
+                                 const char *term_id, uint32_t channel_offset);
+    esp_err_t (*build_iiif_url)(const institution_channel_entry_t *entry,
+                                int longest_side, char *out, size_t len);
+    esp_err_t (*resolve_entry)(institution_channel_entry_t *entry);  // NULL unless lazy resolve
+    bool (*api_key_missing)(void);                                     // NULL unless BYOK
+    const char *unavailable_reason;                                    // NULL unless disabled
 } art_institution_museum_t;
-
-extern const art_institution_museum_t ART_INSTITUTION_MUSEUMS[];
-extern const size_t ART_INSTITUTION_MUSEUM_COUNT;
 ```
+
+Adding a museum means a new `museums/{id}.c`, a `museum_id_t` value
+(append-only), a dispatch-table row, a `webui/museum/{id}.js` adapter
+registered in `webui/museum/index.js`, and a TLS check (§12.3).
 
 The play scheduler refresh dispatcher (`play_scheduler_refresh.c`) gets
 a new case for `PS_CHANNEL_TYPE_INSTITUTION` that parses `name` to
@@ -354,7 +311,7 @@ extract the museum id, looks up the museum in the dispatch table, and
 calls `refresh_channel()`. Refresh is rate-gated by
 `ai_refresh_sec` (see §8) and serialized per-museum (§7.2).
 
-### 5.2 New web UI assets
+### 5.2 Web UI assets
 
 ```
 webui/
@@ -375,20 +332,13 @@ webui/
 ```
 
 `browse.js` exports a function the playset editor opens as a modal when
-the user picks `Channel Type = Museum`. The modal walks: museum →
-axis → term list → preview → confirm. On confirm it returns a
+the user picks `Channel Type = Museum`
+(`<option value="institution">`). The modal walks: museum → axis →
+term list → preview → confirm. On confirm it returns a
 `ps_channel_spec`-shaped object that the editor appends to the playset.
-
-The existing `playset-editor.html` adds a new
-`<option value="institution">Museum</option>` to the channel-type
-select and includes the new module. Vanilla `<script type="module">` is
-fine on the ESP32-served HTTP server — the playset editor is only
-served to LAN-connected modern browsers, never via the boot-time
-captive portal.
-
-The museum flow is too large to keep inline cleanly (~600 lines of
-adapters + browse code). It lives in separate `webui/museum/*.js` files
-loaded as ES modules; the editor file remains the orchestrator.
+The modules load as plain `<script type="module">` ES modules; the
+playset editor is only served to LAN browsers, never via the captive
+portal.
 
 ## 6. REST API
 
@@ -408,7 +358,7 @@ An institution channel serializes as:
   "type": "institution",
   "name": "artic:departments",
   "identifier": "PC-4",
-  "display_name": "AIC · Departments · Arts of Greece, Rome, and Byzantium",
+  "display_name": "AIC · Arts of Greece, Rome, and Byzantium",
   "weight": 100
 }
 ```
@@ -429,11 +379,14 @@ and `playset_channel_type_str()`.
    a single-artwork preview with Previous / Next navigation. The preview
    image is rendered at IIIF `!400,400`. Caption shows title, artist,
    and date. Additional pages are fetched lazily on Next when the local
-   buffer is exhausted. AIC's `from + size ≤ 1000` public-caller cap
-   (see `docs/art-institutions/offset-tests/REPORT.md`) is enforced on
-   the browser side so Next disables at the 1000th record.
-6. User clicks "Add" beneath the strip — strip is the confirmation
-   step. A channel spec is appended to the playset.
+   buffer is exhausted. Preview URLs resolve lazily, one artwork at a
+   time: most museums carry the image id inline in the listing; Rijks
+   performs its 3-hop Linked-Art walk on demand and caches the resolved
+   micrio id per adapter instance. AIC's `from + size ≤ 1000`
+   public-caller cap (see `docs/art-institutions/offset-tests/REPORT.md`)
+   is enforced on the browser side so Next disables at the 1000th record.
+6. User clicks "Add" beneath the preview. The channel (museum, axis,
+   term) is appended to the playset, not the visible artwork.
 7. Editor saves the playset normally via `POST /playsets/{name}`.
 
 ### 7.2 Refresh
@@ -464,9 +417,8 @@ active playset.
 **Per-museum serialization.** When multiple institution channels are
 eligible to refresh in the same dispatcher tick, the dispatcher
 serializes them per museum (at most one in-flight refresh per museum
-at a time). AIC's 60-req/min per-IP cap is the constraint that drives
-this. Rijks's listing is light but the same mechanism applies for
-uniformity.
+at a time). AIC's 60-req/min per-IP cap is the constraint that drove
+this; the same mechanism applies to every museum for uniformity.
 
 ### 7.3 Download
 
@@ -480,7 +432,7 @@ entries.
 1. The download manager picks the next `Ci` entry not in `LAi`.
 2. Looks up the museum dispatch entry, calls
    `build_iiif_url(entry, 720, ...)`.
-3. Streams the JPEG via `esp_http_client` → vault path.
+3. Streams the JPEG via `http_fetch` → vault path.
 4. On success, calls `lai_add_entry(cache, entry->post_id, NULL)`.
 5. Loops to step 1 until `Ci ⊆ LAi`.
 
@@ -501,7 +453,7 @@ listing, restarting the resolution attempts with a fresh budget.
 
 ## 8. NVS settings
 
-Two new `config_store` keys, both global:
+Two `config_store` keys, both global:
 
 | Key | Type | Default | Allowed values |
 |---|---|---|---|
@@ -510,7 +462,8 @@ Two new `config_store` keys, both global:
 
 NVS keys are short (`ai_*` prefix) to fit the NVS 15-char key limit.
 
-Both surface in `webui/settings.html` under a new "Museums" section.
+Both surface in `webui/settings.html` under the "Museums" section, which
+also holds the BYOK keys (`ham_api_key`, `si_api_key`).
 The settings page groups content-source settings together (Makapix,
 Giphy, Museums) rather than alphabetizing. The refresh dispatcher reads
 `ai_refresh_sec` to gate refresh eligibility for institution channels;
@@ -535,8 +488,16 @@ about breadth-of-collection.
 - **Excluded axis:** `exhibitions` — list-only (artwork side stores
   `exhibition_history` as free text), so a saved channel would always
   be empty.
-- **Pagination cap:** AIC's Elasticsearch cap is 10,000 records. Our
-  cache size ceiling is 4,096, so we never hit it.
+- **Pagination cap:** unauthenticated callers get `from + size ≤ 1000`
+  per query (HTTP 403 past it), not the documented 10,000. Deeper
+  `channel_offset`s use POST DSL bool+range partitioning into
+  sub-1000-record id buckets; see
+  `docs/art-institutions/offset-tests/REPORT.md` §1.5-§1.7.
+- **Deep-page 403 is a partial success:** a 403 (or 401) that lands
+  *after* at least one page merged skips orphan eviction, still saves
+  `last_refresh` (so the dispatcher waits the full `ai_refresh_sec`
+  window), and returns `ESP_OK` so the UI shows no hard error. A
+  403/401 on the very first page is still fatal.
 - **Rate limit:** 60 req/min per IP. Browser-side concurrency limited
   to ≤6 parallel requests during term-count probing.
 - **Listing endpoint:**
@@ -545,6 +506,19 @@ about breadth-of-collection.
 - **IIIF URL:** `https://www.artic.edu/iiif/2/{image_id}/full/!720,720/0/default.jpg`
 - **`iiif_key` value:** the `image_id` UUID
 - **`extension`:** always 3 (jpg) — uses the shared makapix/giphy/institution byte encoding
+- **Unavailable since 2026-08:** `www.artic.edu/iiif/2` rejects every
+  non-browser client with a Cloudflare managed challenge (HTTP 403 plus
+  `Cross-Origin-Resource-Policy: same-origin`, so even cross-origin
+  `<img>` loads fail); `api.artic.edu` is unaffected. No UA, header,
+  HTTP/1.1, alternate-host, or proxy bypass works. Refresh and downloads
+  are skipped, the web UI shows a badge and banner and gates browsing,
+  and `/playsets/active` exposes the state as a `museum_unavailable` map.
+  Revert by clearing `unavailable_reason` in the dispatch table and
+  `ARTIC_UNAVAILABLE` in `webui/museum/artic.js` if AIC lifts the block
+  (tracked at art-institute-of-chicago/data-aggregator#151). The block is
+  client-fingerprint based: a desktop client fetched 10/10 renditions
+  unchallenged during the 2026-08-25 survey, so re-test on hardware
+  before treating AIC as permanently lost.
 
 ### 9.2 Rijksmuseum
 
@@ -571,6 +545,10 @@ about breadth-of-collection.
   (cursor-walk via `pageToken` in `OrderedCollectionPage`).
 - **IIIF URL discovery:** 3-hop Linked Art chain
   (HMO → VisualItem → DigitalObject → access_point).
+- **Redirects:** `https://id.rijksmuseum.nl/{id}` answers HTTP 303 with
+  the Linked-Art document behind `Location` (typically
+  `data.rijksmuseum.nl/…`). The resolver follows `Location` itself and
+  skips the empty 3xx bodies; see the comment in `museums/rijksmuseum.c`.
 - **Device-side resolution strategy:** the Linked Art walk is heavy. The
   refresh stores HMO IDs as `iiif_key` with `extension = 0xFF` (sentinel
   for "unresolved"). The download path notices the sentinel, performs
@@ -581,6 +559,10 @@ about breadth-of-collection.
   failures promote the entry to a tombstone (`extension = 0xFE`).
 - **`iiif_key` value:** the micrio short id once resolved; the HMO id
   while unresolved (also fits in 48 bytes).
+- **Sentinels in the cache file:** every Rijks entry persists with
+  `extension = 0xFF` or `0xFE`, so `channel_cache.c`'s loader accepts
+  both alongside the 0-4 file-type range. Without that carve-out the
+  loader discards the whole cache as corrupt on every reboot.
 
 ### 9.3 Victoria and Albert Museum
 
@@ -621,35 +603,24 @@ about breadth-of-collection.
   path's redirect shim follows it).
 - **Required header:** none beyond `Accept: application/json`.
 - **Required query:** `apikey=<uuid>` on every API call. The key is
-  **user-supplied** (BYOK) — stored in NVS under `ham_api_key`, entered
-  via the "Museums" tab in `webui/settings.html`. No key is shipped with
-  the firmware. When the saved key is empty, HAM channel refresh is a
-  no-op (`ESP_LOGI` + return `ESP_OK`, no `last_refresh` write) and the
-  browse modal surfaces "enter your key in Settings" instead of axes.
-  Channels saved while the key is configured remain persistent across
-  reboots; clearing the key only dormants the refresh path. The key gates
-  **discovery only**: playback and image download use keyless NRS/IDS
-  URLs, so a cached HAM channel keeps playing without a key. The
-  key-missing state comes from the per-museum `api_key_missing()`
-  callback on `art_institution_museum_t` (NULL for non-BYOK museums),
-  wrapped by `art_institution_api_key_missing(museum_id)`; `/playsets/active`
-  emits `museum_key_missing: {ham, si}` for the web UI's needs-key badge
-  and banner, and the on-device "no files" branch names the keyless
-  museum ("Needs an API key. Add it in Settings > Museums.").
+  **user-supplied** (BYOK), stored in NVS under `ham_api_key` and
+  entered in the "Museums" tab of `webui/settings.html`; none ships with
+  the firmware. With no key, refresh is a no-op (`ESP_OK`, no
+  `last_refresh` write) and the browse modal asks for the key instead of
+  showing axes. The key gates **discovery only**: image downloads use
+  keyless NRS/IDS URLs, so saved channels keep playing from cache. The
+  per-museum `api_key_missing()` callback (NULL for non-BYOK museums)
+  feeds `art_institution_api_key_missing()`, the `museum_key_missing`
+  map in `/playsets/active` (web UI badge and banner), and the
+  on-device "Needs an API key. Add it in Settings > Museums." message.
 - **Axes (filterable, in browse order):**
   `classification`, `century`, `culture`, `period`, `place`, `medium`,
-  `technique`, `worktype`, `group`, `gallery`. The browser-side adapter
-  ships a display-label map and a skip-list (`color`, `person`); term
-  enumeration within each axis is driven entirely by what the HAM API
-  returns at runtime — endpoint name == filter-param name uniformly, so
-  no per-axis filter mapping is needed. See `docs/art-institutions/
-  ham-investigation/REPORT.md` for the design rationale.
-- **Filter param map:** identity (`classification` → `classification`,
-  etc.).
-- **Term-id field map:** the term-resource records use axis-specific id
-  field names (`classificationid`, `galleryid`, `periodid`, ...), but a
-  generic `id` field is always present too. The adapter reads `id` for
-  uniformity.
+  `technique`, `worktype`, `group`, `gallery`. The browser adapter ships
+  a display-label map and a skip-list (`color`, `person`); terms come
+  from the API at runtime. Endpoint name == filter-param name, so the
+  filter map is identity. Term records carry axis-specific id fields
+  (`classificationid`, ...) plus a generic `id`, which the adapter
+  reads. Rationale: `docs/art-institutions/ham-investigation/REPORT.md`.
 - **Term ordering:** axes whose vocabulary surfaces a populated
   `objectcount` (classification, century, culture, period, place,
   medium, technique, gallery) are sorted by count descending. For
@@ -696,16 +667,11 @@ about breadth-of-collection.
   **user-supplied** (BYOK from api.data.gov — one key covers any
   api.data.gov service: Smithsonian, NASA, NOAA, etc.) — stored in NVS
   under `si_api_key`, entered via the "Museums" tab in
-  `webui/settings.html`. No key is shipped. `DEMO_KEY` is intentionally
-  rate-capped at ~30 req/hour/IP and will throttle the first refresh
-  mid-flight, so users must register their own (free, instant signup at
-  api.data.gov/signup/). When the saved key is empty, refresh is a no-op
-  (`ESP_LOGI` + return `ESP_OK`, no `last_refresh` write) and the browse
-  modal surfaces "enter your key in Settings" instead of the unit list.
-  Behavior on key clear mirrors HAM, including the discovery-only scope:
-  image downloads go to `ids.si.edu` without the key, so cached SI
-  channels keep playing, and the same `api_key_missing()` /
-  `museum_key_missing` surfacing applies.
+  `webui/settings.html`. No key is shipped. `DEMO_KEY` (~30 req/hour/IP)
+  would throttle the first refresh mid-flight, so users register their
+  own (free, instant, api.data.gov/signup/). Missing-key behavior and
+  surfacing mirror HAM exactly, including the discovery-only scope
+  (images come from `ids.si.edu` without the key).
 - **Axes:** one — `unit` (Smithsonian's administrative units). The v1
   wired set in `webui/museum/smithsonian.js` is six art-bearing units:
   CHNDM (Cooper Hewitt), SAAM (American Art), NPG (Portrait Gallery),
@@ -872,22 +838,19 @@ about breadth-of-collection.
 - **`extension`:** always 3 (jpg).
 - **Resolve hook:** none.
 - **Entry width/height:** stored 0 (unknown) — Mia's metadata carries
-  original scan dims, not the 800-bucket rendition, and no downstream
-  consumer reads institution entry dims.
+  original scan dims, not the 800-bucket rendition (§10.2).
 - **Single-record lookup:** query `id:{id}` on the same search endpoint
   — used by `fetchMetadataByIiifKey`.
 - **Rate limit:** none published; default 60 s cooldown on a 429.
-- **Dead-rendition gap (known, upstream):** a slice of records flagged
+- **Dead-rendition gap (known, upstream):** some records flagged
   `image:valid` have no S3 pre-render on any bucket and 403 from every
-  client, including desktop browsers; the download tombstone above
-  absorbs them. Census of all Public Domain paintings: 40/1024 dead on
-  2026-08-24, 139/2574 (5.4%) on 2026-09-29, clustered in object ids
-  ≥ 140000 (newer accessions). `search.artsmia.org` answers 200 to every
-  User-Agent including the firmware's, so this is not a block. Reported
-  upstream as artsmia/collection-elasticsearch#10 (id lists posted
-  2026-08-24 and 2026-09-29; no reply so far). Device logs during a soak
-  look worse than the census because cached-OK files are never
-  re-requested, so the download loop shows mostly the dead tail.
+  client, including desktop browsers; the download tombstone (§11)
+  absorbs them. About 5% of Public Domain paintings (139/2574 on
+  2026-09-29), clustered in object ids ≥ 140000. Not a block:
+  `search.artsmia.org` answers 200 to every User-Agent. Reported upstream
+  as artsmia/collection-elasticsearch#10. Soak logs look worse than the
+  census because cached files are never re-requested, so the download
+  loop shows mostly the dead tail.
 
 ### 9.8 Statens Museum for Kunst (SMK)
 
@@ -987,14 +950,12 @@ it is decoded — an aspect-ratio filter, layout preselection, rendition
 negotiation — depends on closing that gap, so the nine APIs were
 surveyed against ground truth rather than against their documentation.
 
-**Method.** For each museum: fetch a live page through the exact query
-string the refresh path builds, derive `iiif_key` with the same rule
-the parser uses, build the download URL through the same
-`build_iiif_url()` contract at `longest_side = 720`, fetch that exact
-rendition, and read its true dimensions from the JPEG SOF marker. About
-140 images were measured. Reported dimensions were then compared as
-*ratios* against the delivered file, since the ratio, not the absolute
-size, is what the metadata has to predict correctly.
+**Method.** For each museum, a live page was fetched through the exact
+query the refresh path builds, the download URL was built through the
+same `build_iiif_url()` contract at `longest_side = 720`, and the true
+dimensions of about 140 delivered renditions were read from the JPEG
+SOF marker. Reported dimensions were compared as *ratios*, since the
+ratio is what the metadata has to predict.
 
 | Museum | Dims in the response the parser already reads? | Field | Ground-truth check |
 |---|---|---|---|
@@ -1008,68 +969,37 @@ size, is what the metadata has to predict correctly.
 | `si` | **No** | media object exposes `idsId` / `thumbnail` / `resources` only | `info.json` 8/8 |
 | `rijks` | **No** | Linked-Art `DigitalObject` carries only `access_point` / `digitally_shows`; the HMO's `dimension` array is physical centimetres, not pixels | `info.json` 8/8 |
 
-**`!720,720` never crops.** Across roughly 90 reported-versus-delivered
-comparisons, the delivered aspect ratio equalled the master aspect
-ratio for every IIIF museum. Master-dimension metadata is therefore a
-valid *ratio* source even though it is the wrong absolute size, and no
-per-entry `info.json` round trip is needed wherever the listing already
-carries master dims.
+**Findings that matter for implementation:**
 
-**Mia is the one metadata/file divergence, and it is not IIIF.** Its
-`image_width`/`image_height` describe the original scan, while the
-`/800/` bucket was rendered from a differently cropped source in 2 of
-30 sampled records (reported 1.21 vs delivered 1.32; reported 1.21 vs
-delivered 1.40). Both errors are small in absolute terms and would not
-flip a verdict at any plausible threshold, but Mia's dims are an
-approximation of the delivered file, not a description of it.
-
-**Subfield selection removes the payload objection for AIC and HAM.**
-Both APIs honour dot-notation in `fields=`, and neither truncates or
-reorders the array:
-
-| Request | Page size (100 records) |
-|---|---|
-| HAM, current `fields=id,primaryimageurl` | 11.0 KB |
-| HAM, naive `…,images` | 114.2 KB |
-| HAM, `…,images.width,images.height` | 37.5 KB (buffer is 256 KB) |
-| AIC, current `fields=id,title,image_id,artist_title,date_display` | 8.9 KB |
-| AIC, naive `…,thumbnail` | 56.8 KB (the `lqip` base64 blob dominates) |
-| AIC, `…,thumbnail.width,thumbnail.height` | 13.0 KB (buffer is 192 KB) |
-
-**HAM's `images[0]` is the correct element.** 15.7% of HAM records
-carry more than one image, and siblings differ genuinely (one record
-spans 1.63 and 1.92). Ten multi-image records were checked specifically:
-`images[0]` matched the image actually delivered for the record's
-`primaryimageurl` in 10/10, including a 27-image record.
-
-**Wellcome's `aspectRatio` lives behind a query-surface change.** The
-`/images` endpoint returns the field directly and populated it on
-300/300 records, but it is not a drop-in for the `/works` endpoint the
-refresh path uses: it **silently ignores** `workType` and
-`genres.label`, returning the full unfiltered corpus (126 878 results)
-instead of erroring, and expects `source.genres.label` /
-`source.subjects.label` instead. Migrating axes to it without
-per-axis verification would quietly turn every Wellcome channel into
-an unfiltered firehose.
-
-**Rijks, V&A and Smithsonian have no listing-level path.** Their only
-source is a per-entry `info.json` (~390 bytes, one extra HTTPS request),
-which was verified accurate 8/8 for each. Rijks is the mild case: it
-already performs a 3-hop Linked-Art resolve per entry (§9.2), so an
-`info.json` read folds in as a 4th hop rather than introducing a new
-per-entry request pattern.
+- **`!720,720` never crops.** Across ~90 comparisons the delivered ratio
+  equalled the master ratio for every IIIF museum, so master-dimension
+  metadata is a valid ratio source and no per-entry `info.json` round
+  trip is needed where the listing carries master dims.
+- **Mia's dims approximate the file.** They describe the original scan;
+  the `/800/` bucket came from a differently cropped source in 2 of 30
+  samples (1.21 reported vs 1.32 and 1.40 delivered).
+- **Subfield selection keeps AIC and HAM payloads small.** Both honour
+  dot-notation in `fields=`. A 100-record HAM page grows from 11.0 KB to
+  37.5 KB with `images.width,images.height` (naive `images`: 114 KB;
+  buffer 256 KB); AIC grows from 8.9 KB to 13.0 KB with
+  `thumbnail.width,thumbnail.height` (naive `thumbnail`: 57 KB, the
+  `lqip` blob dominates; buffer 192 KB).
+- **HAM's `images[0]` is the right element.** 15.7% of records carry
+  several images with genuinely different ratios; `images[0]` matched
+  the image delivered for `primaryimageurl` in 10/10 multi-image checks.
+- **Wellcome's `/images` endpoint is not a drop-in** (§9.9): it silently
+  ignores `workType` and `genres.label`, returning the unfiltered corpus
+  (126 878 results), and expects `source.`-prefixed fields. Migrating
+  without per-axis verification turns every Wellcome channel into a
+  firehose.
+- **Rijks, V&A and Smithsonian** need a per-entry `info.json` (~390
+  bytes, one extra HTTPS request; accurate 8/8 each). For Rijks it folds
+  into the existing resolve walk as a 4th hop.
 
 **Coverage summary.** 3 museums free today (`smk`, `cma`, `mia`), 2 for
 a one-string `fields=` change (`artic`, `ham`), 1 behind an endpoint
-migration with a verification burden (`wellcome`), 3 requiring a
-per-entry request (`vam`, `si`, `rijks`).
-
-One incidental observation: AIC's IIIF host served all 10 sampled
-renditions to a desktop client during this survey without a Cloudflare
-challenge. This does *not* invalidate the `unavailable_reason` gate in
-§9.1 — the block is client-fingerprint based and the device is the
-fingerprint that gets refused — but it is worth re-testing on hardware
-before assuming AIC is permanently lost.
+migration (`wellcome`), 3 requiring a per-entry request (`vam`, `si`,
+`rijks`).
 
 ## 11. Error handling
 
@@ -1084,6 +1014,8 @@ before assuming AIC is permanently lost.
 | Image download 403 (permanently dead image — e.g. a museum index listing renditions that don't exist, Mia's `image:valid` gaps) | Entry's persisted `download_fails` increments (true 403 only — 401 is excluded via the raw HTTP status threaded through the download path; transient TLS/timeout/5xx/429 never count). At 5 consecutive failures the entry is tombstoned (`extension = 0xFE`) and skipped by scan/pick. The next refresh replaces the entry, granting a fresh 5-attempt budget per `ai_refresh_sec` window — self-healing if the museum fixes its index. |
 | Channel spec parses but museum is unknown (newer playset on older firmware) | Channel skipped at execute time, logged WARN. |
 | Rijks Linked Art walk fails for a specific artwork | Entry left unresolved; retried on the next download attempt. After 3 consecutive failures, entry is tombstoned (`extension = 0xFE`) and skipped forever until the next refresh re-adds the underlying HMO with a fresh attempt budget. |
+| AIC deep page returns 403 after some pages merged | Partial success, not an error (§9.1). |
+| HW JPEG decoder engine creation fails mid-way (DMA2D pool exhausted under concurrent TLS + JPEG pressure) | IDF's cleanup path calls `jpeg_release_codec_handle()` with a NULL handle and dereferences it. `components/animation_decoder/idf_jpeg_release_null_fix.c` wraps the function via linker `--wrap` and returns `ESP_OK` on NULL. Remove when IDF fixes it upstream. |
 
 ### 11.1 Rate-limit handling (first-class)
 
@@ -1103,8 +1035,8 @@ bool     art_institution_is_rate_limited(const char *museum_id);
 uint32_t art_institution_rate_limit_remaining(const char *museum_id);
 ```
 
-**Internal state:** a fixed-size table keyed by museum id (small N — 2
-today, single digits forever), each entry carrying `cooldown_until_ms`.
+**Internal state:** a fixed-size table indexed by `museum_id_t`, each
+entry carrying `cooldown_until_ms`.
 Process-wide, RAM-only (rebooting clears it, matching Giphy).
 
 **When cooldown engages:**
@@ -1112,7 +1044,7 @@ Process-wide, RAM-only (rebooting clears it, matching Giphy).
 | Trigger | Cooldown source |
 |---|---|
 | HTTP 429 with `Retry-After: N` | Honor `N` seconds. |
-| HTTP 429 without header | Default per-museum: AIC = 60 s (one window), Rijks = 60 s. |
+| HTTP 429 without header | 60 s for every museum (one AIC window). |
 | Repeated connection failures (≥3 in 30 s) | 30 s defensive cooldown, prevents thrashing. |
 
 **Where it's checked:**
@@ -1126,22 +1058,18 @@ Process-wide, RAM-only (rebooting clears it, matching Giphy).
 
 **Web UI:**
 
-- **Browse modal:** before kicking off term-count probes (AIC's
-  expensive step), the modal reads cooldown state from the device
-  (`GET /api/museum/rate-limits`). If the picked museum is in
-  cooldown, the modal renders a "rate-limited — try again in N
-  seconds" message with a countdown.
+- **Browse modal:** before term-count probes, the modal reads
+  `GET /api/museum/rate-limits`; a museum in cooldown gets a
+  "rate-limited — try again in N seconds" countdown.
 - **Settings page** "Museums" section reuses Giphy's settings-hint
   pattern: documents AIC's 60-req/min limit and explains the math
-  (~41 paginated requests per channel refresh, so 4+ channels firing
-  in parallel risks a 429).
-- **Browser-side self-limiting:** AIC's term-count probe is capped at
-  concurrency 6. 429 responses received by the browser are reported
-  to the device via `POST /api/museum/rate-limits/report-429` so
-  the device's cooldown state stays accurate even when the bandwidth
-  came from the browser, not the device. This sharing matters because
-  AIC's limit is per-IP — browser-issued and device-issued requests
-  share the budget.
+  (~11 paginated requests per channel refresh at the default cache size,
+  ~41 at 4096, so several channels firing together risk a 429), plus
+  the HAM and SI per-key caps.
+- **Browser-side self-limiting:** term-count probes run at concurrency
+  ≤ 6. A 429 the browser receives is reported via
+  `POST /api/museum/rate-limits/report-429`, because per-IP limits
+  (AIC's) make browser and device requests share one budget.
 - **Landing-page channel-list badge rule.** The "current playset" view
   on the landing page shows a per-channel status indicator. For
   institution channels, the `"API rate limited"` badge is rendered
@@ -1170,28 +1098,28 @@ smoke test from a desktop browser pointed at the device's served UI.
 
 ### 12.2 Device-side refresh
 
-Capture fixture JSON responses from real museum endpoints under
-`components/art_institution/test/fixtures/` so the URL builder, JSON
-parser, and cache-merge code can be exercised manually with a small
-harness.
+There is no device-side test harness. Refresh, parse, and merge are
+exercised on hardware; the per-museum API probes behind each adapter
+live in `reference/museum-art/source/{museum}/` and the investigation
+reports under `docs/art-institutions/`.
 
-### 12.3 TLS cert bundle verification (pre-merge gate)
+### 12.3 TLS cert bundle verification (per new museum)
 
-Before the first C-side commit lands, verify `esp_crt_bundle` covers
-all required CDNs: `api.artic.edu`, `www.artic.edu`, `iiif.micr.io`,
-`data.rijksmuseum.nl`. If any CDN's chain root is missing, document
-the explicit `esp_crt_bundle_attach` + custom cert workaround before
-the code is committed.
+Before a new museum's C adapter lands, verify `esp_crt_bundle` covers
+every host it calls (API, image host, and any redirect target). The
+current list is in the §11 TLS row. If a chain root is missing,
+document the explicit `esp_crt_bundle_attach` + custom cert workaround
+before the code is committed.
 
 ### 12.4 End-to-end manual test (release gate)
 
 Before each release that includes museum changes:
 
-1. Add an AIC Painting channel (axis: artwork-types, term: Painting).
-2. Add an AIC Department channel (e.g. Modern and Contemporary Art).
-3. Add a Rijks Set channel (e.g. the largest available set).
-4. Confirm immediate first-refresh kicks in within one dispatcher tick.
-5. Let the device run for 24 hours and confirm:
+1. Add channels from at least three available museums, including one
+   with a lazy resolver (Rijks) and one BYOK museum (HAM or SI).
+2. Include every museum the release touches.
+3. Confirm immediate first-refresh kicks in within one dispatcher tick.
+4. Let the device run for 24 hours and confirm:
    - the picker rotates,
    - JPEG downloads succeed,
    - the periodic refresh completes without errors,
@@ -1204,7 +1132,8 @@ doors.
 
 - **Keyword search** across museums. Encoding fits the same channel
   spec (`name="artic:search"`, `identifier="<query>"`).
-- **More museums:** Gallica. (Nine have shipped — see §9.)
+- **More museums.** Nine have shipped (§9). Parked candidates have
+  pages in `docs/deferred/` (Gallica, Library of Congress).
 - **Aggregator sources:** Europeana, DPLA.
 - **Per-channel overrides** for refresh interval / cache size.
 - **Manifest synthesis** for image-only IIIF (Princeton).
@@ -1213,8 +1142,8 @@ doors.
   (`vam`, `si`, `rijks`) and which already publish usable dimensions in
   their listing responses.
 - **Aspect-ratio filter:** hide artworks too elongated to display well
-  on the square panel. Design is closed and recorded in §16; no code
-  written.
+  on the square panel. Design is closed, no code written:
+  [`docs/deferred/aspect-ratio-filter.md`](../deferred/aspect-ratio-filter.md).
 - **Cross-channel mark-and-sweep vault GC**, if field experience shows
   the existing age-based eviction (§4.4) is insufficient for actual
   user patterns. Measurement-driven, not speculative.
@@ -1230,311 +1159,11 @@ doors.
   XML parser becomes available in ESP-IDF, or content-diversity value
   justifies the integration cost. Deferred design notes in
   [`docs/deferred/gallica.md`](../deferred/gallica.md).
+- **Library of Congress:** scaffolded and removed before release; the
+  48-byte `iiif_key` slot cannot hold most LoC IIIF ids. Notes in
+  [`docs/deferred/library-of-congress.md`](../deferred/library-of-congress.md).
 - **Wellcome long labels:** lifting the 32-char identifier limit so
   Wellcome terms with longer labels become selectable. Revisit
   trigger: enough valuable Wellcome terms get hidden in real usage to
   justify a playset format bump. Deferred design notes in
   [`docs/deferred/wellcome-long-labels.md`](../deferred/wellcome-long-labels.md).
-
-## 14. Implementation milestones
-
-Vertical-slice approach: AIC end-to-end first, then Rijks. **M1 and M2
-landed.** Field-observed fixes that emerged during implementation are
-captured in §15; the milestone descriptions below are kept as the
-original implementation plan for historical reference.
-
-### M1 — AIC end-to-end — LANDED
-
-Smallest shippable surface. After M1 the device can play AIC channels.
-
-1. **C side:**
-   - `components/art_institution/` scaffold (CMakeLists, Kconfig,
-     public header, dispatch table).
-   - `museums/artic.c` adapter: `refresh_channel`, `build_iiif_url`.
-   - Wire `PS_CHANNEL_TYPE_INSTITUTION = 7` into `playset_store.c`,
-     `playset_json.c`, and `play_scheduler_refresh.c`.
-   - New cache entry format `PS_ENTRY_FORMAT_INSTITUTION`.
-   - Two new NVS settings (`ai_refresh_sec`, `ai_cache_size = 1024`).
-   - Rate-limit infrastructure (§11.1): per-museum cooldown table,
-     public API, `GET /api/museum/rate-limits` endpoint,
-     browser→device 429 reporting endpoint.
-   - Per-museum serialization in the refresh dispatcher (§7.2).
-   - Continuous serialized download manager loop (§7.3).
-   - Extend `components/storage_eviction/`: add `sd_path_get_museum()`
-     and one call to `evict_from_base_dir()` so the existing
-     age-based eviction also walks `/sdcard/p3a/museum/` (§4.4).
-   - Wire institution refresh into the existing intra-channel orphan
-     eviction pattern (§4.4 mechanism 1).
-   - TLS cert bundle verified for `api.artic.edu`, `www.artic.edu`.
-2. **Web UI:**
-   - `webui/museum/index.js`, `webui/museum/artic.js`,
-     `webui/museum/browse.js`.
-   - Playset-editor `<option value="institution">Museum</option>` +
-     modal wiring.
-   - Cooldown-aware browse modal (reads `/api/museum/rate-limits`,
-     reports its own 429s back to the device).
-   - Landing-page channel-list badge logic ("API rate limited" only
-     when channel is stale **and** museum is in cooldown — §11.1).
-   - Settings page "Museums" section grouped with Makapix/Giphy, with
-     the two NVS keys and a settings-hint explaining AIC's 60-req/min
-     limit.
-3. **Manual gate:** 24-hour soak with an AIC Department + AIC
-   Artwork-Type channel; picker rotates, downloads succeed, refresh
-   completes.
-
-### M2 — Rijksmuseum end-to-end — LANDED
-
-Reuses the M1 scaffolding.
-
-1. **C side:**
-   - `museums/rijksmuseum.c` adapter, including lazy 3-hop Linked-Art
-     walk at download time and the sentinel-extension scheme from
-     §9.2.
-   - TLS cert bundle verified for `iiif.micr.io`,
-     `data.rijksmuseum.nl`.
-2. **Web UI:**
-   - `webui/museum/rijksmuseum.js`.
-   - `webui/museum/rijks-sets.json` baked into the LittleFS image,
-     regenerated by `scripts/build_rijks_sets.py`.
-3. **Manual gate:** add a Rijks set channel to the soak playset; same
-   checks.
-
-### M3 — Release polish
-
-- Settings copy / help text in `webui/settings.html`.
-- Version bump in root `CMakeLists.txt`.
-- `docs/HOW-TO-USE.md` updated with the new channel type.
-
-## 15. Field-observed fixes
-
-Issues that only surfaced once the firmware was running against the
-real museum APIs and the on-device decode pipeline. Each is captured
-here so a future reader doesn't have to git-archeology the rationale
-out of commit messages.
-
-### 15.1 AIC `/artworks/search` returns 403 on deep pages
-
-Empirically AIC returns HTTP 403 on `?page=N` requests past page ~10
-for facets with very large result sets (e.g. `artwork_type_id=1`
-"Painting"), independent of the documented 10 000-record offset cap.
-Treating a 403 (or 401) that lands *after* at least one page merged
-as a partial success — skip orphan eviction, still save
-`last_refresh` so the dispatcher waits the full `ai_refresh_sec`
-window before retrying, return `ESP_OK` so the dispatcher's UI does
-not render a hard error. A 403/401 on the very first page is still
-fatal. See `museums/artic.c` and the commit that introduced it.
-
-### 15.2 Rijks HMO URLs require manual redirect handling
-
-`https://id.rijksmuseum.nl/{id}` returns HTTP 303 with the actual
-Linked-Art document served from the `Location` header (typically
-`data.rijksmuseum.nl/…`). The ESP-IDF HTTP client only follows
-redirects automatically when you call `esp_http_client_perform()`;
-the `open/fetch_headers/read` pattern used elsewhere in this
-codebase does not, and on IDF v5.5.2 the `disable_auto_redirect`
-flag does not prevent `fetch_headers` from internally consuming the
-`Location` header before user code can read it via
-`esp_http_client_get_header()`. `museums/rijksmuseum.c` works around
-this by attaching an `HTTP_EVENT_ON_HEADER` event handler that
-captures `Location` into a per-request scratch struct — the parser
-dispatches the event synchronously during header parsing, regardless
-of how the client later treats the status code.
-
-### 15.3 ESP-IDF JPEG decoder NULL-deref during cleanup
-
-When `jpeg_new_decoder_engine()` fails partway through (observed
-when DMA2D pool acquisition fails under concurrent TLS + JPEG
-pressure), its `err:` cleanup calls `jpeg_del_decoder_engine()`,
-which calls `jpeg_release_codec_handle(decoder_engine->codec_base)`
-with `codec_base` still NULL. The IDF function checks the global
-`s_jpeg_platform.jpeg_codec` (non-NULL — earlier decodes set it) but
-not the parameter, and dereferences NULL on line 94 of
-`jpeg_common.c`. Worked around in
-`components/animation_decoder/idf_jpeg_release_null_fix.c` with a
-linker `--wrap` shim that returns `ESP_OK` on NULL input. Remove
-when IDF fixes the function upstream.
-
-### 15.4 Channel cache loader rejected institution sentinels
-
-`channel_cache.c`'s per-entry validator treated any `extension > 4`
-as corrupt and discarded the whole cache file on the next load. For
-Rijks channels every entry persists with `extension=0xFF` (or
-`0xFE` for tombstones), so the loader was wiping the cache on every
-reboot. Validator now accepts both reserved sentinels alongside the
-0-4 file-type range. Makapix/Giphy entries never use these values,
-so this is a no-op for those channel types.
-
-### 15.5 Cosmetic: `esp-x509-crt-bundle` info spam
-
-Every TLS handshake emitted an info-level "Certificate validated"
-line that drowned out actually-useful events. Lifted to
-`ESP_LOG_WARN` at `app_main` start (warnings/errors still surface).
-
-### 15.6 Browse preview UX: 8-thumbnail grid → single-artwork preview
-
-The original design (§7.1, M1) used an 8-thumbnail 4×2 grid at 64×64.
-Two field-observed issues drove the redesign:
-
-1. Latency. Fetching 8 artworks visibly stalls the preview, especially
-   for Rijks — its IIIF resolution requires a 3-hop Linked-Art walk
-   per artwork, so populating an 8-tile grid would cost 24 extra HTTP
-   requests. The original Rijks implementation worked around this by
-   skipping image previews entirely and rendering a textual card list,
-   which made Rijks's preview qualitatively different from AIC and V&A.
-2. Mobile readability. 64×64 thumbnails in a 4-column grid inside a
-   ≤560 px modal are too small to evaluate the artwork.
-
-The replacement shows one artwork at a time at IIIF `!400,400`, with
-Previous / Next navigation. Per-artwork preview URLs are resolved
-lazily — AIC and V&A use the inline `image_id` from the listing
-response (synchronous); Rijks performs the 3-hop walk on demand and
-caches the resolved micrio id per adapter instance. The Add button
-still commits the channel (museum, axis, term), not the visible
-artwork. See
-`docs/superpowers/specs/2026-05-12-museum-single-artwork-preview-design.md`.
-
-## 16. Aspect-ratio filter — DESIGNED, NOT IMPLEMENTED
-
-> **Status: no code written.** This section is a closed design ready for
-> implementation, recorded so the decisions and the traps survive. Nothing
-> described here exists in the firmware today.
-
-Artworks with an extreme aspect ratio (a 4:1 banner, a 1:6 scroll) are
-letterboxed correctly onto the square 720×720 panel and still display
-badly — mostly empty screen. The filter lets the user set a maximum
-ratio past which a museum artwork is simply not shown.
-
-### 16.1 Why not filter on museum metadata
-
-The obvious design — read `entry->width`/`height` at pick time — fails
-on its own terms: the §10.2 survey found that eight of the nine museums
-leave those fields at 0, and the one museum whose listing dims are an
-approximation rather than a description (Mia) is precisely the kind of
-source a filter should not silently trust. Teaching six parsers to fill
-the fields would cover six museums and leave three fail-open forever.
-
-The dimensions the renderer actually uses are already computed, exactly
-once, in the load path. Filtering there needs no parser, no extra
-request, and no trust in any museum's metadata.
-
-### 16.2 Architecture: measure in the loader, memoize in RAM, filter in the picker
-
-1. **Measure.** `load_animation_into_buffer()` checks immediately after
-   `loader_service_load()` returns, reading
-   `loaded.info.canvas_width`/`canvas_height` — the same pair
-   `build_upscale_maps_for_buffer()` consumes, so there is no second
-   opinion that can disagree with the first. The check sits *before*
-   `init_animation_decoder_for_buffer()`, so a rejected artwork never
-   allocates `native_frame_b1` / `b2`.
-2. **Skip, don't fail.** On rejection the loader reuses the existing
-   blocklist-skip shape (`clear_pending_swap_state()` then
-   `event_bus_emit_simple(P3A_EVENT_SWAP_NEXT)`), sharing the existing
-   `MAX_BLOCKLIST_SKIPS` (6) budget. See §16.4 for why the failure path
-   must not be reused.
-3. **Memoize.** The loader reports the measurement back via a new
-   `ps_report_institution_dims(post_id, w, h)`, which walks all active
-   channels and fills `width`/`height` on every matching institution
-   entry — mirroring `animation_loader_evict_from_lai()`, which already
-   solves the same-artwork-in-two-channels case. It deliberately does
-   **not** set `cache->dirty`: the memo is RAM-only and is recomputed
-   after a reboot, so no cache-format change and no carve-out in
-   `art_institution_merge_entries()` is needed.
-4. **Filter.** `play_scheduler_pick.c` rejects any institution entry
-   whose stored dims exceed the threshold. Pure integer comparison,
-   zero I/O.
-
-`entry->width`/`height` therefore means "best known dimensions from any
-source": CMA's refresh parser fills them (verified pixel-exact in
-§10.2), the loader fills them for everyone else.
-
-**Cost.** Each *distinct* elongated artwork costs one full decode per
-boot, then is filtered at pick and never loaded again. Artworks that
-pass the filter cost nothing extra, ever. CMA costs nothing at all.
-`jpeg_decoder_init()` fully decodes (HW `jpeg_decoder_process`, or the
-SW fallback), so that one decode is not free — it is simply bounded.
-
-**Accepted defect.** `ps_history_push()` and `last_played_id` are
-committed when a swap is *queued* (`prepare_and_request_swap()` returns
-`ESP_OK`), not when it displays. A rejected artwork therefore enters
-history once per boot without ever appearing, so Previous can land on
-an artwork the user never saw. Accepted rather than moving the commit
-point, which would touch a core path well beyond this feature.
-
-### 16.3 Behaviour
-
-| Decision | Value |
-|---|---|
-| Scope | Museum (`PS_CHANNEL_TYPE_INSTITUTION`) channels only |
-| Exempt | Pinned (`PS_CHANNEL_TYPE_PINNED`) and single-artwork push (`PS_CHANNEL_TYPE_ARTWORK`, show_url) — both explicit user intent. Manual Next is **not** exempt. |
-| Unknown dims | Fail open — `width == 0 \|\| height == 0` shows the artwork |
-| Comparison | `ratio > max` rejects; `ratio == max` passes |
-| Range | 2.5 – 10.0, step 0.1, default **4.0**, filter **ON** by default |
-| Downloads | Not gated. Elongated art still downloads and caches, so raising the threshold takes effect immediately with no refetch. |
-| Empty channel | No safety valve. If everything is filtered the channel reports exhausted through the existing giveup path. |
-| Browse modal | Deliberately unchanged — the playset editor still previews artworks that will not play. |
-
-Exemptions are free: the loader already receives `channel_type`, and
-pinned and single-artwork arrive under their own types.
-
-Rotation is irrelevant: the panel is square, so a 4:1 artwork is
-equally poor at any rotation.
-
-**Settings.** `config_store` is a single JSON blob, not raw NVS keys,
-so this is two fields alongside `ai_refresh_sec` / `ai_cache_size`:
-
-```json
-{ "ai_ar_filter": true, "ai_max_ar_tenths": 40 }
-```
-
-Integer tenths (40 = 4.0) keeps the comparison exact integer maths
-(`w * 10 > max_tenths * h`) and matches every other setting being an
-integer. The web UI renders `value / 10` with one decimal. Both the UI
-and the setter clamp to the 2.5–10.0 range. The settings hint states
-that the filter applies to museum channels only and never to pinned
-artworks or artworks opened directly — neither is guessable from the
-control itself.
-
-Changing the threshold needs no cache invalidation: the memo stores
-dimensions, not verdicts.
-
-### 16.4 Implementation traps
-
-These are the ways this feature goes wrong quietly. All were found by
-reading the load path, not by testing.
-
-- **The rejection needs its own sentinel `esp_err_t`.**
-  `ESP_ERR_INVALID_SIZE` is already returned by `loader_service` for
-  oversized and truncated files, which are genuine corruption and must
-  still reach `animation_loader_try_delete_corrupt_cached_file()`.
-  Reusing it makes the two indistinguishable. The project has no custom
-  error base yet, so one needs defining.
-- **Never route the rejection through the failure path.** Three
-  landmines in `animation_player_loader.c`:
-  1. `animation_loader_try_delete_corrupt_cached_file()` fires for any
-     failing path containing `/museum/`. An elongated artwork would be
-     deleted from the vault and evicted from LAi, then re-downloaded on
-     the next refresh, and deleted again — a permanent bandwidth loop
-     that also reads as corruption in the logs.
-  2. `MAX_AUTO_RETRIES = 3` — three elongated picks in a row would
-     paint "Playback Error" for what is a deliberate policy decision.
-  3. `proc_notif_fail_if_processing()` would report failure on the
-     processing indicator.
-- `SWAP_FAIL_LOUD` is set only by `execute_playset()` on a
-  user-initiated playset switch, not by a manual Next press — so the
-  on-screen-error risk is narrower than it first appears, but it is not
-  zero.
-- Rejection chains are self-terminating: every rejection memoizes, so
-  the worst case is that the loader measures a channel once and the
-  picker then reports exhausted. The `MAX_BLOCKLIST_SKIPS` bound exists
-  to cap the *burst* of decodes, not to prevent a loop.
-- Per-swap pick logging stays at INFO (operator-facing), consistent
-  with the existing `ps_chsel` / `ps_pick` lines.
-
-### 16.5 Verification
-
-Set the threshold to its 2.5 floor on-device: ordinary landscape works
-past 5:2 then trip the filter, so the path is exercised without needing
-a curated set of extreme artworks. Confirm that (a) the rejected
-artwork is skipped silently with no error overlay, (b) it is not
-deleted from the vault, (c) a second encounter with the same artwork
-costs no decode, and (d) pinning that artwork makes it play.
