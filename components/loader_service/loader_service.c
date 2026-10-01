@@ -68,7 +68,7 @@ static esp_err_t read_file_to_buffer(const char *filepath, uint8_t **data_out, s
     // Cache-line aligned address AND size: the ESP32-P4 SD host only DMAs
     // directly to a PSRAM buffer that satisfies both; otherwise every 512-byte
     // sector goes through an internal bounce buffer with its own SD command
-    // (~1000 commands per 500 KB artwork). See docs/jitter/PLAN.md, H3b.
+    // (~1000 commands per 500 KB artwork). See docs/jitter/REPORT.md §3.1.
     const size_t alloc_size = ((size_t)file_size + SD_DMA_ALIGN - 1) & ~(size_t)(SD_DMA_ALIGN - 1);
     uint8_t *buffer = (uint8_t *)heap_caps_aligned_alloc(SD_DMA_ALIGN, alloc_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!buffer) {

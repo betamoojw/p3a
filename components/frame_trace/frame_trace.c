@@ -6,7 +6,7 @@
  * @brief Presentation-lateness frame trace: PSRAM ring, stats, stall reporter.
  *
  * Compiled only when CONFIG_P3A_FRAME_TRACE=y (see CMakeLists.txt). Design
- * notes in docs/jitter/PLAN.md §4. Hot-path cost: one atomic add, ~56 bytes of
+ * notes in docs/jitter/README.md §Frame trace. Hot-path cost: one atomic add, ~56 bytes of
  * PSRAM writes and a handful of integer ops per frame or mark. No logging from
  * the writers; the only output is the reporter task on core 0 at priority 2.
  */
@@ -230,7 +230,7 @@ void frame_trace_frame(const ft_frame_in_t *in)
             s_ema_produce_us = s_ema_produce_us - (s_ema_produce_us >> 3) + (produce_us >> 3);
         }
         const bool producer_late = (margin < 0) && ((int64_t)-margin >= (int64_t)lateness - 16667);
-        // 2x the running mean: heavy artworks vary +-50% frame to frame (RUN-02:
+        // 2x the running mean: heavy artworks vary +-50% frame to frame (measured
         // 80-137 ms on a 90 ms mean), a starved producer is far beyond that.
         const bool produce_anomalous = produce_us >= (2u * s_ema_produce_us);
         const bool overrun_explained = producer_late && !produce_anomalous;
@@ -494,7 +494,7 @@ static void ft_report(uint32_t stall_seq)
             if (buf[i].seq > stall_seq + 4) { n = 0; break; }
             // Keep the report small: a 30 KB report at 115200 baud is ~2.6 s of
             // UART output on core 0, which measurably drags the render core
-            // (RUN-20260829-13-logexp: +18 % upscale time). Sub-millisecond
+            // (log-flood experiment: +18 % upscale time). Sub-millisecond
             // SD spans are summarized by count instead of printed.
             if (buf[i].type == FT_TYPE_MARK && buf[i].lateness_us > 0 && buf[i].lateness_us < 1000 &&
                 (buf[i].kind == FT_MARK_SD_READ || buf[i].kind == FT_MARK_SD_WRITE)) {

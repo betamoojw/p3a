@@ -6,8 +6,8 @@
 #   pwsh host/jitter-lab/soak.ps1 -NewRunId                            # prints the next free RUN-YYYYMMDD-NN
 #
 # The logger and puller are detached processes (survive the agent session);
-# their pids live in runs/<RUN>/pids.json. Raw data is gitignored; the
-# committed summary is docs/jitter/runs/<RUN>.md (written by hand from report.md).
+# their pids live in runs/<RUN>/pids.json. Raw data and report.md are
+# gitignored and stay local; results that matter go into docs/jitter/REPORT.md.
 param(
     [switch]$Start, [switch]$Stop, [switch]$Status, [switch]$NewRunId,
     [string]$Run,

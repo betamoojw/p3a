@@ -10,7 +10,7 @@ Writes into host/jitter-lab/runs/<RUN>/:
 
 Opening the port: DTR and RTS are forced low BEFORE open() so the CH343 bridge
 does not pulse the ESP32-P4 reset line (verify: /api/state uptime must keep
-climbing across a logger start; see docs/jitter/LOG.md).
+climbing across a logger start; verified on the dev unit 2026-08-28).
 """
 import argparse
 import json

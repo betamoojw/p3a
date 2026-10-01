@@ -66,7 +66,7 @@ def apply(host, show_fps=None, max_speed=None, brightness=None, rotation=None, d
     if body:
         # ALWAYS merge=true: without it, PUT /config REPLACES the whole config
         # (API keys, sdcard_root, device_name gone). Learned the hard way on
-        # 2026-08-29 (docs/jitter/LOG.md, "config wipe incident").
+        # 2026-08-29 (the dev unit's config was wiped by a plain PUT).
         r = requests.put(f"{host}/config?merge=true", json=body, timeout=15)
         r.raise_for_status()
         print("PUT /config?merge=true", body, "->", r.status_code)

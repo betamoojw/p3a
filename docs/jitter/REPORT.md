@@ -1,9 +1,10 @@
 # Jitter Work Stream — Final Report
 
-Companion to `README.md` (status, rules, environment), `PLAN.md` (hypotheses,
-design, decision records) and `LOG.md` (journal). This file is the standalone
-summary: what the stalls were, what caused them, what was changed, and the
-evidence. Written 2026-08-30.
+Standalone summary of the jitter work stream: what the stalls were, what
+caused them, what was changed, and the evidence. Written 2026-08-30.
+`README.md` holds the open follow-up (esp-idf #19034), the diagnostic builds
+and the lab tooling. Per-run notes and the working journal were retired from
+the tree; they remain in git history before the 2026-10 docs cleanup.
 
 ## 1. Problem and pass bar
 
@@ -37,8 +38,8 @@ in-scope stalls per hour as reported by `host/jitter-lab/analyze.py`
 \* p99 in the unfixed run is dominated by the overrun sawtooth that Phase 6
 later removed; the stall column is the comparable number.
 
-Every run summary lives in `runs/RUN-*.md` with the raw numbers, the
-attribution tables and the reasoning that led to the next fix.
+Run IDs refer to raw captures kept on the lab laptop
+(`host/jitter-lab/runs/`, not committed).
 
 ## 3. What the stalls were
 
@@ -59,7 +60,7 @@ Signature: a single frame whose **upscale** time balloons from ~14 ms to
 few hundred ms, always overlapping bursts of SD activity by another task
 (`download_mgr`, `event_bus`, `anim_loader`).
 
-Root physics (H3c, `runs/RUN-20260830-03-04.md`): after every SD write, IDF's
+Root physics (H3c, RUN-20260830-03/04): after every SD write, IDF's
 `sdmmc_wait_for_idle()` polls CMD13 (SEND_STATUS) **without yielding** for up
 to 100 ms until the card reports ready. This card is busy 1–45 ms per block, so
 each write is followed by hundreds of back-to-back SD commands. During such a
@@ -108,8 +109,8 @@ core 1 and runs above the consumer (prio 6). Reproduced 3/3 with
 
 ## 4. What changed
 
-All fixes are on `main` (`8cf28935`); each is its own commit with the
-before/after runs linked in `LOG.md`.
+All fixes are on `main` (`8cf28935`); each is its own commit whose message
+names its before/after runs.
 
 | # | Commit (main) | Change |
 |---|---|---|
@@ -123,7 +124,7 @@ before/after runs linked in `LOG.md`.
 | 7b | `24164cb3` | Every networking/SD/event task and the HTTP server pinned to core 0 (32 call sites) |
 | 8 | `8cf28935` | New always-on component `sd_idle_wait`: link-time `--wrap` of `sdmmc_wait_for_idle` that yields one tick between CMD13 polls. Removes the root physics; fixes 1–6 remain as command-count reductions |
 
-On the branch (`feat/jitter`), to land with the final merge:
+Landed with the final merge of `feat/jitter` (`f65f1dd4`, 2026-08-30):
 
 - **Phase 6 catch-up policy** (`main/display_renderer.c`): a frame that is
   late because the producer is late re-baselines the playhead to now (uniform
@@ -161,10 +162,20 @@ On the branch (`feat/jitter`), to land with the final merge:
 
 - **Fix 9** (landed 2026-08-30 evening, `6dae17cc`): `/upload` writes through
   a 64 KB aligned PSRAM stdio buffer; upload-phase producer anomalies 11 -> 2
-  (`runs/RUN-20260830-07-08-upload-ab.md`).
-- **Upstream**: reported to Espressif 2026-08-31 as https://github.com/espressif/esp-idf/issues/19034
+  (RUN-20260830-07/08 upload A/B).
+- **Upstream**: reported to Espressif 2026-08-31 as
+  [esp-idf #19034](https://github.com/espressif/esp-idf/issues/19034)
   (no-yield CMD13 poll in `sdmmc_wait_for_idle()`, reproducer numbers,
-  suggested patch, PR offered). Code unchanged on master at posting time.
+  suggested patch, PR offered). Environment as reported: ESP-IDF v5.5.4,
+  ESP32-P4 rev v1.0 on the Waveshare ESP32-P4-WIFI6-Touch-LCD-4B, SDMMC
+  slot 0, 4-bit bus, `SDMMC_FREQ_HIGHSPEED` (40 MHz, no DDR), FATFS via
+  `esp_vfs_fat_sdmmc_mount`, FreeRTOS tick 1000 Hz, TOPESEL 32 GB microSDHC
+  UHS-I Class 10 (busy 1-45 ms after a single-block write). In stock v5.5.4
+  the loop is in `components/sdmmc/sdmmc_common.c` (lines 431-459) and only
+  starts calling `vTaskDelay(1)` after `yield_delay_us = 100 * 1000`.
+  Espressif's patch was evaluated against fix 8 on 2026-09-02/03
+  (`espressif-patch/README.md`); its v2 (back-off capped at one tick) tested
+  OK and p3a keeps fix 8 until an IDF release carries it.
 - **Unexplained pair** in RUN-20260829-10 (#3/#4: 257/234 ms with no SD
   activity; consumer vsync wait 143 ms while the UART reporter printed). Not
   seen again after fix 7/7b.
@@ -175,7 +186,7 @@ On the branch (`feat/jitter`), to land with the final merge:
 
 ## 7. How to re-run
 
-`README.md` §Resume protocol. Short form: `host/jitter-lab/build.ps1 [-Diag]
+`README.md` §Diagnostic builds and §Lab tooling. Short form: `host/jitter-lab/build.ps1 [-Diag]
 [-Flash]`, `soak.ps1 -Start -Run <id> -DeviceHost http://p3a-fab.local`,
 `analyze.py <id>`, `compare_runs.py A B`. Tooling refuses any device whose
 hostname is not `p3a-fab`.

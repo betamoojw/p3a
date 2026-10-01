@@ -10,7 +10,7 @@
  * yield during the first 100 ms (components/sdmmc/sdmmc_common.c). A busy
  * period is 1-45 ms on the cards seen in the field, so each write turns into a
  * storm of hundreds of host commands. Measured on the ESP32-P4 dev unit
- * (docs/jitter/runs/RUN-20260830-04-idle-exp.md): during such storms the
+ * (docs/jitter/REPORT.md §3.1): during such storms the
  * decode and upscale on BOTH cores run 3-50x slower, which was the dominant
  * source of sporadic 100-800 ms playback stalls. Polling once per FreeRTOS
  * tick removes the effect entirely: the same provocation that produced 6-9
@@ -22,7 +22,8 @@
  * CONFIG_P3A_SD_IDLE_WAIT_WRAP (default y) controls whether this file is
  * compiled and the wrap applied; sd_idle_wait_info.c reports the outcome.
  * Upstream: esp-idf issue #19034 (Espressif's own back-off patch is evaluated
- * against this wrapper in docs/jitter/espressif-patch/).
+ * against this wrapper in docs/jitter/espressif-patch/README.md; when an IDF
+ * release carries the fix, follow the checklist in docs/jitter/README.md).
  */
 
 #include "esp_err.h"

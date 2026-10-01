@@ -1,6 +1,6 @@
 # jitter-lab — host tooling for the jitter work stream
 
-See `docs/jitter/README.md` for the work stream, rules and resume protocol.
+See `docs/jitter/README.md` for the work stream's status, rules and diagnostic builds.
 All tools are plain Python 3 (system `python`, needs `pyserial` + `requests`,
 both present on the laptop) or PowerShell 7.
 
@@ -12,8 +12,9 @@ both present on the laptop) or PowerShell 7.
   without `--no-reset` DO reset it. `idf.py flash` always resets (by design).
 - Device HTTP: `http://p3a-fab.local`. `GET /config` contains API keys:
   `snapshot_settings.py` redacts every `*_api_key`; nothing else reads it.
-- Raw run data goes to `host/jitter-lab/runs/<RUN-ID>/` (gitignored).
-  Committed summaries go to `docs/jitter/runs/<RUN-ID>.md`.
+- Raw run data and the generated `report.md` go to
+  `host/jitter-lab/runs/<RUN-ID>/` (gitignored). Per-run notes are not
+  committed; results that matter go into `docs/jitter/REPORT.md`.
 - Run IDs: `RUN-YYYYMMDD-NN` (`soak.ps1 -NewRunId` prints the next free one).
 - Ring capacity is 8192 entries (~4 min of 30 fps frames + marks): the puller
   must poll at least every 2-3 minutes or rows are lost.

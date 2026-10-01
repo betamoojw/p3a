@@ -1,6 +1,6 @@
 # Makapix mTLS Client-Certificate Renewal — Firmware Plan
 
-**Status: IMPLEMENTED on `feature/makapix-cert-renewal` (2026-07-08) — see PROGRESS.md. Open questions resolved: no webui renew button; self-heal = expiry-first, one unconditional attempt before latching.**
+**Status: shipped in 1.1.0; reopened 2026-09-29 for 1.2.4 (release planned 2026-10-10) after the MQTT CA re-issue: 190-day window, renewal forced on a broker-CA verify failure, retry while latched. Unverified on hardware until Fab tests. See PROGRESS.md. Open questions resolved: no webui renew button; self-heal = expiry-first, one unconditional attempt before latching.**
 
 ## Why now
 
@@ -20,14 +20,15 @@ The server side shipped 2026-05-27 and is waiting on us:
   mpx_live_…`), **works even after the cert has expired**, make-before-break
   (old cert not revoked), returns `cert_pem` + `key_pem` + `ca_pem` +
   `cert_expires_at` in one response. Guard: 400 unless within
-  `CERT_RENEWAL_THRESHOLD_DAYS` (90) of expiry or already expired. Rate limits:
+  `CERT_RENEWAL_THRESHOLD_DAYS` of expiry (200 in production since
+  2026-09-29, 90 before) or already expired. Rate limits:
   10/day/player, 30/hour/IP.
 - `POST /api/player/{player_key}/token/rotate` — token bootstrap, gated only on
   knowledge of `player_key`. Returns `api_token`. **All currently deployed p3a
   devices have no stored token** (the firmware discards the `api_token` field of
   the credentials response), so this is every device's first step.
 
-The renewal window for the earliest certs opens **~2026-09-13**. Firmware must
+Under the original 90-day server threshold, the window for the earliest certs opened **~2026-09-13**. Firmware must
 be released *and OTA-adopted* well before **2026-12-12**.
 
 > **Fleet cliff CONFIRMED from prod DB (server team, 2026-07-08, message
@@ -109,6 +110,20 @@ dead (404 on rotate) or renewal succeeded yet the broker still rejects us
 self-heals on the next boot instead of demanding re-registration — and a whole
 class of future ghost-registration-style incidents becomes self-recovering.
 
+Two more triggers since 2026-09-29 (1.2.4):
+
+- **Broker-CA verify failure.** When the TLS failure carries non-zero
+  certificate verify flags (`makapix_mqtt_server_cert_verify_failed()`, for
+  example an expired trusted root), the reconnect task calls the shared
+  `try_cert_selfheal()` on the first such failure instead of waiting for
+  `MAX_AUTH_FAILURES`. The renew-cert call runs over HTTPS with the public
+  CA bundle, independent of the stored MQTT CA, and its `ca_pem` replaces the
+  stale trust anchor. A `no_clock` outcome does not consume the one-shot.
+- **Retry while latched.** The periodic check forces an attempt while the
+  state is `REGISTRATION_INVALID`, so a transient failure of the one-shot no
+  longer leaves a device dark until power-cycle; the server (400/404) decides
+  whether the latch is genuine.
+
 ### New registrations: keep the token from day one
 
 `makapix_poll_credentials()` parses `ca_pem`/`cert_pem`/`key_pem` but ignores
@@ -162,7 +177,7 @@ as for the existing fleet.)
 
 - Dev overlay `CERT_RENEWAL_THRESHOLD_DAYS=3650` (API + worker) so fresh
   1095-day dev certs are immediately renewable for end-to-end testing;
-  prod stays 90.
+  prod is 200 since 2026-09-29 (90 before).
 - CRL reload watcher in the broker container (separate issue found during the
   audit: nightly CRL renewal wasn't visible to a long-running broker; also
   makes device revocation near-immediate).

@@ -259,7 +259,7 @@ static void provoke_log(uint32_t n)
     frame_trace_mark(FT_MARK_PROVOKE, FT_PHASE_END, 0x10u << 24 | n);
 }
 
-// SD write provocation with controlled buffer placement (jitter work stream, H3b/H4):
+// SD write provocation with controlled buffer placement (bounce-path reproducer, docs/jitter/REPORT.md §3.1):
 //   mode 0: PSRAM, deliberately misaligned (+64 B)   -> driver bounces 512 B per SD command
 //   mode 1: PSRAM, 128-byte aligned                  -> direct DMA from PSRAM
 //   mode 2: internal DMA-capable RAM                 -> direct DMA, never touches PSRAM

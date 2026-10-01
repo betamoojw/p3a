@@ -3,29 +3,44 @@
 
 /**
  * @file transport_recovery.c
- * @brief ESP-Hosted SDIO transport failure handling (Phase 0: orderly reboot)
+ * @brief ESP-Hosted SDIO transport failure handling: orderly reboot
  *
- * Live plan: docs/transport-recovery/PLAN.md
+ * Failure signature (grep the UART log for these):
+ *   E H_SDIO_DRV: Dropping packet(s) from stream
+ *   E sdmmc_io: sdmmc_io_rw_extended: sdmmc_send_cmd returned 0x109  (CRC)
+ *   E sdmmc_io: sdmmc_io_rw_extended: sdmmc_send_cmd returned 0x107  (timeout)
+ *   E H_SDIO_DRV: Unrecoverable host sdio state
+ * Seen after hours of sustained full-duplex SDIO load (many channel refreshes
+ * plus concurrent downloads). The RX stream loses framing, then TX CMD53
+ * writes fail with CRC and timeout; after MAX_SDIO_WRITE_RETRY the driver
+ * declares the transport dead. Known open esp-hosted-mcu bug (issues #121,
+ * #167, #184), not fixed by newer esp-hosted or a lower SDIO clock, so the
+ * strategy is containment on our side.
  *
- * esp_hosted's built-in reaction to an unrecoverable SDIO transport failure
- * is an immediate esp_restart() from inside the driver: no SD quiesce, no
- * on-screen notice, no telemetry. CONFIG_ESP_HOSTED_TRANSPORT_RESTART_ON_FAILURE
- * is disabled in sdkconfig, so the driver now only posts
- * ESP_HOSTED_EVENT_TRANSPORT_FAILURE (guaranteed regardless of that setting)
- * and this module owns the reaction:
+ * esp_hosted's own reaction is an immediate esp_restart() from inside the
+ * driver: no SD quiesce, no notice, no telemetry. With
+ * CONFIG_ESP_HOSTED_TRANSPORT_RESTART_ON_FAILURE disabled in sdkconfig the
+ * driver only posts ESP_HOSTED_EVENT_TRANSPORT_FAILURE (posted at every
+ * failure site regardless of that setting) and this module owns the reaction:
+ * persist telemetry counters (NVS tp_rst_tot / tp_rst_str), show a countdown
+ * so in-flight network error paths can close their files, then esp_restart().
+ * After TRANSPORT_REBOOT_STREAK_LIMIT consecutive failure reboots without a
+ * GOT_IP in between, the device stays up in degraded playback-only mode and
+ * quiesces the network stack (netif down, MQTT stopped, health monitor
+ * parked) so nothing keeps feeding the dead link. Degraded is terminal until
+ * reboot. CP_INIT events are logged only (the first per boot is the normal C6
+ * announcement; acting on later ones risks false-positive reboots).
  *
- * Phase 0 (this code): orderly reboot. Persist telemetry counters, show an
- * on-screen countdown, give in-flight network error paths a few seconds to
- * unwind file handles, then esp_restart(). A reboot-streak guard parks the
- * device in degraded (playback-only) mode instead of reboot-looping when the
- * transport fails on every boot; degraded mode quiesces the network stack
- * (netif down, MQTT stopped, health monitor parked) so nothing keeps feeding
- * the dead SDIO link. Identical behavior for every slave fw version (the
- * event is generated host-side; the stuck-2.7.0 fleet is safe).
+ * Design rule: enhancements may be gated on the slave fw version, the safety
+ * ladder (reboot -> streak guard -> degraded) never is. The event is generated
+ * host-side with no slave participation, so the ladder also covers the
+ * stuck-2.7.0 fleet, which can never be updated.
  *
- * Phase 1 (planned): in-place recovery (esp_hosted_deinit/init, which
- * hard-resets the C6 via GPIO 54) for slave fw >= 2.9.x, escalating to this
- * Phase 0 path on failure. See the plan doc.
+ * In-place recovery (esp_hosted_deinit/init, which hard-resets the C6 via
+ * GPIO 54) was implemented and dropped on 2026-06-09: the C6 (SDMMC slot 1)
+ * and the microSD (slot 0) share the one ESP32-P4 SDMMC controller, so the
+ * reinit kills the SD card mid-playback. A newer slave fw cannot change that
+ * host-side coupling. The orderly reboot is the production recovery path.
  */
 
 #include <stdio.h>
@@ -207,7 +222,7 @@ static void transport_event_handler(void *arg, esp_event_base_t event_base,
     case ESP_HOSTED_EVENT_CP_INIT: {
         // The C6 announces itself once per boot (we reset it on every host
         // bootup). A later CP_INIT means the C6 rebooted underneath us.
-        // Phase 0 records the evidence only; Phase 1 will act on it.
+        // Logged as evidence only; acting on it risks false-positive reboots.
         // reset_reason is meaningful on >= 2.9.x slaves; reads 0 on 2.7.0.
         esp_hosted_event_init_t *init = (esp_hosted_event_init_t *)event_data;
         esp_reset_reason_t reason = init ? init->reason : ESP_RST_UNKNOWN;

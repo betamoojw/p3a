@@ -6,7 +6,7 @@
  * @brief Presentation-lateness frame trace for the jitter work stream.
  *
  * Everything in this header compiles to nothing unless CONFIG_P3A_FRAME_TRACE
- * is set: release builds carry no code and no data. See docs/jitter/PLAN.md §4.
+ * is set: release builds carry no code and no data. See docs/jitter/README.md §Frame trace.
  *
  * Two record types share one PSRAM ring buffer:
  *  - FRAME: written by the display consumer at esp_lcd_panel_draw_bitmap time.

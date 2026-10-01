@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """sd_experiment.py -- Phase 4 provocation: does an in-flight SD write slow the CPU upscale,
-and does it depend on where the buffer lives? (jitter work stream, H3b/H4)
+and does it depend on where the buffer lives? (jitter work stream: SD bounce path vs PSRAM bandwidth)
 
     python host/jitter-lab/sd_experiment.py RUN-ID [--host http://p3a-fab.local] [--rounds 3]
 

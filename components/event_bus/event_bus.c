@@ -115,8 +115,9 @@ esp_err_t event_bus_init(void)
     // every subscriber handler runs synchronously on this stack, and a handler
     // that hits a deep error path under an SD-fault storm can overflow a 4 KB
     // stack (observed 2026-06-09 during transport-recovery bench testing).
-    // PSRAM-backed, so this costs no internal RAM. See the backlog note in
-    // docs/transport-recovery/PLAN.md.
+    // PSRAM-backed, so this costs no internal RAM. Deeper robustness items
+    // (handlers run synchronously under the dispatch mutex; emit drops on a
+    // full queue) are left for a future event_bus refactor.
     const size_t event_bus_stack_size = 8192;
     if (!s_event_bus_stack) {
         s_event_bus_stack = heap_caps_malloc(event_bus_stack_size * sizeof(StackType_t),

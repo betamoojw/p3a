@@ -1,4 +1,4 @@
-# Overlay for the esp-idf #19034 evaluation (docs/jitter/espressif-patch/):
+# Overlay for the esp-idf #19034 evaluation (docs/jitter/espressif-patch/README.md):
 # build WITHOUT p3a's yielding sdmmc_wait_for_idle() wrapper so that the stock
 # IDF function (or Espressif's patched one) is what runs. Never for release.
 #   host/jitter-lab/build.ps1 -Diag -Extra sdkconfig.nowrap.defaults -Suffix nowrap

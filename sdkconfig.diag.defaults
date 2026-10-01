@@ -1,4 +1,4 @@
-# Jitter work stream diagnostic overlay (docs/jitter/PLAN.md §4.5).
+# Jitter work stream diagnostic overlay (docs/jitter/README.md §Diagnostic builds).
 #
 # Applied ON TOP of the tracked release `sdkconfig` into a separate build dir:
 #   host/jitter-lab/build.ps1 -Diag        (idf.py -B build-diag -DSDKCONFIG=build-diag/sdkconfig

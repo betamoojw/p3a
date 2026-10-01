@@ -337,7 +337,7 @@ static void fill_borders_rows(uint8_t *dst_buffer, int dst_w, int dst_h,
 // for a while (SD command/ISR churn during downloads and cache saves, Wi-Fi
 // interrupts, a busy lower-priority task inflating interrupt time) delayed the
 // core-0 half and therefore the whole frame: measured upscale times of
-// 100-780 ms against a 16 ms norm (docs/jitter/runs/RUN-20260829-*.md).
+// 100-780 ms against a 16 ms norm (docs/jitter/REPORT.md, fix 3).
 // Now both workers pull UPSCALE_BAND_ROWS-row bands from one atomic counter
 // until the frame is done. A stalled core costs at most the band it holds; the
 // other core finishes the rest. Each band is cache-flushed by the worker that
