@@ -21,6 +21,7 @@
 #include "esp_netif.h"
 #include "esp_heap_caps.h"
 #include "lwip/inet.h"
+#include "mbedtls/x509.h"  // MBEDTLS_ERR_X509_CERT_VERIFY_FAILED
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
@@ -73,8 +74,9 @@ static mqtt_client_state_t s_mqtt_state = MQTT_CLIENT_NONE;
 
 // Track consecutive TLS authentication failures to detect invalid registration
 static int s_consecutive_auth_failures = 0;
-// Set when the last TLS failure carried non-zero certificate verify flags:
-// the device could not validate the broker's certificate against its stored
+// Set when the last TLS failure was mbedTLS rejecting the broker's chain
+// (MBEDTLS_ERR_X509_CERT_VERIFY_FAILED, or non-zero verify flags): the
+// device could not validate the broker's certificate against its stored
 // ca_pem (CA rotation, expired trust anchor). Cleared on connect and with
 // the auth-failure counter.
 static bool s_server_cert_verify_failed = false;
@@ -365,20 +367,29 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         if (event->error_handle) {
             ESP_LOGE(TAG, "Error type: %d", event->error_handle->error_type);
             ESP_LOGE(TAG, "Connect return code: %d", event->error_handle->connect_return_code);
+            // We rejected the broker's certificate chain. esp-tls stores the
+            // negated mbedTLS code in esp_tls_stack_err; check it as well as
+            // the verify flags, because on a failed handshake mbedTLS has no
+            // established session yet, so esp-tls never reads the flags and
+            // they arrive as 0 (IDF 5.5.4, esp_mbedtls_handshake).
+            bool chain_rejected =
+                event->error_handle->esp_tls_stack_err == -MBEDTLS_ERR_X509_CERT_VERIFY_FAILED ||
+                event->error_handle->esp_tls_cert_verify_flags != 0;
             if (event->error_handle->esp_tls_last_esp_err) {
-                ESP_LOGE(TAG, "TLS error: 0x%x (%s)",
+                ESP_LOGE(TAG, "TLS error: 0x%x (%s), stack error -0x%x",
                          event->error_handle->esp_tls_last_esp_err,
-                         esp_err_to_name(event->error_handle->esp_tls_last_esp_err));
+                         esp_err_to_name(event->error_handle->esp_tls_last_esp_err),
+                         event->error_handle->esp_tls_stack_err);
                 // Track TLS handshake failures. 0x801a
                 // (ESP_ERR_MBEDTLS_SSL_HANDSHAKE_FAILED) covers both directions:
                 // the broker rejecting our client certificate (expired,
                 // revoked, ghost registration) and us rejecting the broker's
-                // certificate (verify flags below). Both are cured by a
+                // certificate (chain_rejected). Both are cured by a
                 // certificate renewal, which also refreshes ca_pem.
                 if (event->error_handle->esp_tls_last_esp_err == 0x801a) {  // ESP_ERR_MBEDTLS_SSL_HANDSHAKE_FAILED
                     s_consecutive_auth_failures++;
                     ESP_LOGW(TAG, "TLS auth failure #%d (%s)", s_consecutive_auth_failures,
-                             event->error_handle->esp_tls_cert_verify_flags
+                             chain_rejected
                                  ? "broker certificate failed verification against stored CA"
                                  : "broker rejected client certificate");
                 }
@@ -388,6 +399,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             }
             if (event->error_handle->esp_tls_cert_verify_flags) {
                 ESP_LOGE(TAG, "TLS cert verify flags: 0x%x", event->error_handle->esp_tls_cert_verify_flags);
+            }
+            if (chain_rejected) {
                 s_server_cert_verify_failed = true;
             }
         } else {

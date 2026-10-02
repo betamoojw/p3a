@@ -204,8 +204,10 @@ void makapix_mqtt_reset_auth_failure_count(void);
 /**
  * @brief Whether the last TLS failure was the device rejecting the broker
  *
- * True when the most recent MQTT TLS error carried non-zero certificate
- * verify flags: the broker's certificate did not validate against the
+ * True when the most recent MQTT TLS error was mbedTLS rejecting the
+ * broker's chain (MBEDTLS_ERR_X509_CERT_VERIFY_FAILED in the esp-tls stack
+ * error; the verify flags themselves arrive as 0 on a failed handshake in
+ * IDF 5.5.4): the broker's certificate did not validate against the
  * stored ca_pem (CA rotation, expired trust anchor). The client
  * certificate's remaining lifetime says nothing about this case, so the
  * reconnect path forces a renewal at once instead of waiting for the

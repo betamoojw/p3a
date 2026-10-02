@@ -112,13 +112,19 @@ class of future ghost-registration-style incidents becomes self-recovering.
 
 Two more triggers since 2026-09-29 (1.2.4):
 
-- **Broker-CA verify failure.** When the TLS failure carries non-zero
-  certificate verify flags (`makapix_mqtt_server_cert_verify_failed()`, for
-  example an expired trusted root), the reconnect task calls the shared
+- **Broker-CA verify failure.** When the TLS failure is mbedTLS rejecting
+  the broker's chain (`makapix_mqtt_server_cert_verify_failed()`: esp-tls
+  stack error `-0x2700`, `MBEDTLS_ERR_X509_CERT_VERIFY_FAILED`, for example
+  an expired or replaced trusted root), the reconnect task calls the shared
   `try_cert_selfheal()` on the first such failure instead of waiting for
   `MAX_AUTH_FAILURES`. The renew-cert call runs over HTTPS with the public
   CA bundle, independent of the stored MQTT CA, and its `ca_pem` replaces the
   stale trust anchor. A `no_clock` outcome does not consume the one-shot.
+  The certificate verify flags cannot be the signal: on a failed handshake
+  mbedTLS has no established session, so esp-tls (IDF 5.5.4) never reads
+  them and they reach the MQTT error event as 0. The server only renews a
+  cert within its threshold (200 days), so a player with a stale CA and a
+  cert further from expiry cannot self-heal this way.
 - **Retry while latched.** The periodic check forces an attempt while the
   state is `REGISTRATION_INVALID`, so a transient failure of the one-shot no
   longer leaves a device dark until power-cycle; the server (400/404) decides
