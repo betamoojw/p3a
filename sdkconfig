@@ -841,6 +841,12 @@ CONFIG_ESP_WIFI_AUTH_WPA2_PSK=y
 #
 CONFIG_P3A_USB_MSC_ENABLE=y
 # end of USB
+
+#
+# Diagnostics
+#
+# CONFIG_P3A_SD_RAW_DEBUG is not set
+# end of Diagnostics
 # end of Physical Player of Pixel Art (P3A)
 
 #
