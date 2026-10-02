@@ -180,3 +180,60 @@ recover on their own after 2026-10-25 (asked MPX to nudge those owners), the
 1.2.4 proactive path reaches only players whose owners install it, and the
 mixed 1.0.0 to 1.2.3 fleet is explained by the approval step. The same
 wording was corrected in AGENTS.md and the OTA_WEBUI_ENABLE Kconfig help.
+
+## 2026-10-02: Verify-failure path tested on hardware; trigger was dead
+
+Dev unit `p3a-fab.local`, prod player `61e35119-...` (client cert valid to
+2029-06-13, stored CA `CN=Makapix Dev CA` re-issued 2026-05-27). A throwaway
+diagnostic build (not committed) added a Kconfig-gated endpoint that
+overwrites the NVS `ca_cert` blob; the device was rebooted after each plant.
+Planted CA: a self-signed EC certificate with the real CA's subject name,
+a different key, and validity ending 2026-05-27. Serial captured without
+reset (`host/jitter-lab/runs/CA-20261002*`, not tracked).
+
+Note on fidelity: a planted CA cannot produce `BADCERT_EXPIRED`. mbedTLS
+skips a candidate root whose signature does not match, so any wrong CA
+yields `NOT_TRUSTED`. The firmware path does not depend on the flag value.
+
+**Run 1, main as of `98d4a94f`: the fast path never fired.** Each handshake
+failed with `mbedtls_ssl_handshake returned -0x2700`
+(`MBEDTLS_ERR_X509_CERT_VERIFY_FAILED`), but the MQTT error event carried
+verify flags 0, so the log said "broker rejected client certificate" and the
+device waited for the three-failure threshold (self-heal at 125 s uptime).
+Root cause, IDF 5.5.4: on a failed handshake `ssl->session` is still NULL,
+so `mbedtls_ssl_get_peer_cert()` returns NULL and `esp_mbedtls_handshake()`
+skips `esp_mbedtls_verify_certificate()`, the only place the flags are
+captured. Change 2 of the 2026-09-29 entry could therefore never trigger.
+The esp-tls stack error does carry `0x2700`, which is specific to the device
+rejecting the broker's chain.
+
+**Fix (working tree, pending Fab's review and commit):** `makapix_mqtt.c`
+sets the verify-failed flag on stack error `-MBEDTLS_ERR_X509_CERT_VERIFY_FAILED`
+as well as on non-zero flags, logs the stack error, and labels the failure
+from the same test. PLAN.md updated to match.
+
+**Run 1b, same diagnostic build plus the fix:** failure #1 at 11.2 s labelled
+"broker certificate failed verification against stored CA"; self-heal fired
+at 21.8 s (first backoff), instead of 125 s. Failures #2 and #3 followed;
+the threshold latched `REGISTRATION_INVALID` at 97 s with no second renewal
+call (one renew-cert per outage, as designed). Run 2 (an unrelated valid CA)
+was dropped: same signal, same server answer.
+
+**Server answer in both runs: 400, "certificate not close enough to
+expiry".** This player's cert has 985 days left, beyond the server's 200-day
+threshold, so recovery could not complete here. The 15 pre-re-issue players
+(certs ending 2026-12-12 to 2027-04-16) are all inside 200 days, so their
+renewals should be accepted; the path after a successful renewal (persist,
+reconnect with fresh PEMs) was covered by T4 in July. A player holding a
+stale CA with a cert more than 200 days from expiry cannot self-heal
+through renew-cert; none is known to exist.
+
+Side effects on prod: run 1 bootstrapped this player's API token through
+`token/rotate` (it had none; registration predates token capture); two
+renew-cert calls answered 400. After each run the real CA was restored
+through the endpoint and the device reconnected at once. The unit now runs
+a release-config build of main plus the fix.
+
+Still not verified on hardware: a renewal that succeeds after a CA verify
+failure (needs a cert inside the server threshold), and the retry while
+latched (needs a check interval to elapse while latched).
